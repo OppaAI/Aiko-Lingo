@@ -37,6 +37,13 @@ data class ConversationResponse(
 
 @Serializable
 data class ConversationRespondRequest(
+    val text: String,
+    val history: List<DialogueHistoryEntry> = emptyList()
+)
+
+@Serializable
+data class DialogueHistoryEntry(
+    val speaker: String, // "aiko" or "student"
     val text: String
 )
 

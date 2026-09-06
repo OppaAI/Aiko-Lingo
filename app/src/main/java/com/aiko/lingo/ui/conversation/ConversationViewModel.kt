@@ -5,6 +5,7 @@ import androidx.lifecycle.viewModelScope
 import com.aiko.lingo.data.model.ConversationRespondRequest
 import com.aiko.lingo.data.model.ConversationResponse
 import com.aiko.lingo.data.model.ConversationStartRequest
+import com.aiko.lingo.data.model.DialogueHistoryEntry
 import com.aiko.lingo.data.remote.AikoApiService
 import android.media.AudioAttributes
 import android.media.MediaPlayer
@@ -39,6 +40,14 @@ class ConversationViewModel(private val apiService: AikoApiService) : ViewModel(
 
     fun respond(text: String) {
         viewModelScope.launch {
+            val currentDialogue = _dialogue.value
+            val history = currentDialogue.map { 
+                DialogueHistoryEntry(
+                    speaker = if (it.isUser) "student" else "aiko",
+                    text = it.japanese
+                )
+            }
+
             // Add user entry first
             _dialogue.value += DialogueEntry(text, "", isUser = true)
             
@@ -46,7 +55,9 @@ class ConversationViewModel(private val apiService: AikoApiService) : ViewModel(
             _uiState.value = ConversationUiState.ActiveLoading 
             
             try {
-                val response = apiService.respondToConversation(ConversationRespondRequest(text))
+                val response = apiService.respondToConversation(
+                    ConversationRespondRequest(text = text, history = history)
+                )
                 processResponse(response)
             } catch (e: Exception) {
                 _uiState.value = ConversationUiState.Error(e.message ?: "Failed to respond")
