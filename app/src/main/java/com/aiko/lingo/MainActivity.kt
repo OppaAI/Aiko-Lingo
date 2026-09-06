@@ -13,6 +13,7 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.activity.enableEdgeToEdge
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
@@ -49,6 +50,7 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        enableEdgeToEdge()
         setContent {
             var darkTheme by remember { mutableStateOf(false) }
             
@@ -97,6 +99,7 @@ fun MainMenu(
     Column(
         modifier = Modifier
             .fillMaxSize()
+            .safeDrawingPadding()
             .padding(24.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center
@@ -108,7 +111,7 @@ fun MainMenu(
             contentScale = ContentScale.Crop
         )
         Text("Aiko Lingo ♡", style = MaterialTheme.typography.headlineLarge)
-        Text("Learn English with Aiko", modifier = Modifier.padding(top = 8.dp, bottom = 32.dp))
+        Text("Learn Nihongo with Aiko", modifier = Modifier.padding(top = 8.dp, bottom = 32.dp))
         
         Button(onClick = onNavigateToTranslate, modifier = Modifier.fillMaxWidth(0.7f)) {
             Text("✦  Translate")

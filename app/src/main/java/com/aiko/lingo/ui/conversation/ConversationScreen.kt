@@ -37,7 +37,12 @@ fun ConversationScreen(
         }
     }
 
-    Column(modifier = Modifier.fillMaxSize().padding(16.dp)) {
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .safeDrawingPadding()
+            .padding(16.dp)
+    ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             TextButton(onClick = onBack) { Text("← Back") }
             Spacer(modifier = Modifier.width(8.dp))
@@ -56,16 +61,30 @@ fun ConversationScreen(
             ConversationUiState.SelectingLevel -> LevelSelection { viewModel.start(it) }
             ConversationUiState.Loading -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { CircularProgressIndicator() }
             is ConversationUiState.Error -> Text("Error: ${state.message}", color = Color.Red)
-            ConversationUiState.Active, ConversationUiState.Finished -> {
-                Column(modifier = Modifier.weight(1f)) {
+            ConversationUiState.Active, ConversationUiState.ActiveLoading, ConversationUiState.Finished -> {
+                Column(
+                    modifier = Modifier
+                        .weight(1f)
+                        .imePadding()
+                ) {
                     LazyColumn(
                         modifier = Modifier.weight(1f),
                         state = listState,
-                        verticalArrangement = Arrangement.spacedBy(12.dp)
+                        verticalArrangement = Arrangement.spacedBy(12.dp),
+                        contentPadding = PaddingValues(bottom = 16.dp)
                     ) {
                         items(dialogue) { entry ->
                             DialogueBubble(entry, onPlayAudio = { viewModel.playAudio(entry.audioUrl) })
                         }
+                        
+                        if (state is ConversationUiState.ActiveLoading) {
+                            item {
+                                Box(modifier = Modifier.fillMaxWidth().padding(8.dp), contentAlignment = Alignment.CenterStart) {
+                                    CircularProgressIndicator(modifier = Modifier.size(24.dp))
+                                }
+                            }
+                        }
+
                         if (karaokeText.isNotEmpty() && (dialogue.isEmpty() || !dialogue.last().isUser)) {
                             item {
                                 KaraokeBubble(karaokeText)
@@ -73,10 +92,11 @@ fun ConversationScreen(
                         }
                     }
 
-                    if (state is ConversationUiState.Active) {
+                    if (state is ConversationUiState.Active || state is ConversationUiState.ActiveLoading) {
                         ResponseInput(
                             onSend = { viewModel.respond(it) },
-                            onHint = { viewModel.getHint() }
+                            onHint = { viewModel.getHint() },
+                            enabled = state is ConversationUiState.Active
                         )
                     } else {
                         Button(onClick = { viewModel.stop() }, modifier = Modifier.fillMaxWidth()) {
@@ -156,24 +176,25 @@ fun KaraokeBubble(text: String) {
 }
 
 @Composable
-fun ResponseInput(onSend: (String) -> Unit, onHint: () -> Unit) {
+fun ResponseInput(onSend: (String) -> Unit, onHint: () -> Unit, enabled: Boolean) {
     var text by remember { mutableStateOf("") }
 
     Row(
         modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        IconButton(onClick = onHint) {
-            Icon(Icons.Default.Lightbulb, contentDescription = "Hint", tint = Color.Yellow)
+        IconButton(onClick = onHint, enabled = enabled) {
+            Icon(Icons.Default.Lightbulb, contentDescription = "Hint", tint = if (enabled) Color.Yellow else Color.Gray)
         }
         OutlinedTextField(
             value = text,
             onValueChange = { text = it },
             modifier = Modifier.weight(1f),
             placeholder = { Text("Reply to Aiko...") },
-            shape = RoundedCornerShape(24.dp)
+            shape = RoundedCornerShape(24.dp),
+            enabled = enabled
         )
-        IconButton(onClick = { if (text.isNotBlank()) { onSend(text); text = "" } }) {
+        IconButton(onClick = { if (text.isNotBlank()) { onSend(text); text = "" } }, enabled = enabled) {
             Icon(Icons.AutoMirrored.Filled.Send, contentDescription = "Send")
         }
     }

@@ -39,13 +39,15 @@ class ConversationViewModel(private val apiService: AikoApiService) : ViewModel(
 
     fun respond(text: String) {
         viewModelScope.launch {
-            _uiState.value = ConversationUiState.Loading
+            // Add user entry first
+            _dialogue.value += DialogueEntry(text, "", isUser = true)
+            
+            // Set to loading but keep the conversation on screen
+            _uiState.value = ConversationUiState.ActiveLoading 
+            
             try {
-                // Add user entry first
-                _dialogue.value += DialogueEntry(text, "", isUser = true)
                 val response = apiService.respondToConversation(ConversationRespondRequest(text))
                 processResponse(response)
-                _uiState.value = ConversationUiState.Active
             } catch (e: Exception) {
                 _uiState.value = ConversationUiState.Error(e.message ?: "Failed to respond")
             }
@@ -89,10 +91,15 @@ class ConversationViewModel(private val apiService: AikoApiService) : ViewModel(
             japanese = response.japaneseText,
             english = response.englishTranslation,
             isUser = false,
-            audioUrl = response.audioUrl
+            audioUrl = response.audioUrl,
+            isCorrect = response.isCorrect,
+            feedback = response.feedback,
+            suggestion = response.suggestion
         )
         if (response.isFinished) {
             _uiState.value = ConversationUiState.Finished
+        } else {
+            _uiState.value = ConversationUiState.Active
         }
         playAudio(response.audioUrl)
     }
@@ -134,6 +141,8 @@ class ConversationViewModel(private val apiService: AikoApiService) : ViewModel(
             _karaokeText.value += char
             delay(50) // Typewriter speed
         }
+        delay(300) // Brief pause after finishing
+        _karaokeText.value = "" // Clear after done to avoid double bubbles
     }
 }
 
@@ -142,13 +151,17 @@ data class DialogueEntry(
     val english: String,
     val isUser: Boolean,
     val isHint: Boolean = false,
-    val audioUrl: String? = null
+    val audioUrl: String? = null,
+    val isCorrect: Boolean = true,
+    val feedback: String? = null,
+    val suggestion: String? = null
 )
 
 sealed class ConversationUiState {
     object SelectingLevel : ConversationUiState()
     object Loading : ConversationUiState()
     object Active : ConversationUiState()
+    object ActiveLoading : ConversationUiState() // Added for non-blocking loading
     object Finished : ConversationUiState()
     data class Error(val message: String) : ConversationUiState()
 }

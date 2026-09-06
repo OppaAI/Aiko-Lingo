@@ -1,6 +1,6 @@
 # Aiko Lingo
 
-An Android companion app for learning English with Aiko.
+An Android companion app for learning Nihongo with Aiko.
 
 This is intentionally separate from the Aiko-chan web UI. The app will connect to the Aiko server over Tailscale and provide translation and guided conversation modes.
 

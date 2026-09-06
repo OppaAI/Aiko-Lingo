@@ -30,6 +30,7 @@ fun TranslateScreen(
     Column(
         modifier = Modifier
             .fillMaxSize()
+            .safeDrawingPadding()
             .padding(16.dp)
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
@@ -43,8 +44,8 @@ fun TranslateScreen(
         OutlinedTextField(
             value = inputText,
             onValueChange = { inputText = it },
-            modifier = Modifier.fillMaxWidth(),
-            placeholder = { Text("Enter English text...") },
+            modifier = Modifier.fillMaxWidth().imePadding(),
+            placeholder = { Text("Enter English to translate...") },
             trailingIcon = {
                 Button(onClick = { viewModel.translate(inputText) }) {
                     Text("Go")

@@ -29,7 +29,10 @@ data class ConversationResponse(
     val japaneseText: String,
     val englishTranslation: String,
     val audioUrl: String? = null,
-    val isFinished: Boolean = false
+    val isFinished: Boolean = false,
+    val isCorrect: Boolean = true,
+    val feedback: String? = null,
+    val suggestion: String? = null
 )
 
 @Serializable
