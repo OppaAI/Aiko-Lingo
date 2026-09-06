@@ -25,14 +25,23 @@ import com.aiko.lingo.ui.translate.TranslateViewModel
 import retrofit2.converter.kotlinx.serialization.asConverterFactory
 import kotlinx.serialization.json.Json
 import okhttp3.MediaType.Companion.toMediaType
+import okhttp3.OkHttpClient
 import retrofit2.Retrofit
+import java.util.concurrent.TimeUnit
 
 class MainActivity : ComponentActivity() {
     
     private val json = Json { ignoreUnknownKeys = true }
     private val apiService by lazy {
+        val okHttpClient = OkHttpClient.Builder()
+            .connectTimeout(120, TimeUnit.SECONDS)
+            .readTimeout(120, TimeUnit.SECONDS)
+            .writeTimeout(120, TimeUnit.SECONDS)
+            .build()
+
         Retrofit.Builder()
             .baseUrl("https://aiko.ide-chroma.ts.net/")
+            .client(okHttpClient)
             .addConverterFactory(json.asConverterFactory("application/json".toMediaType()))
             .build()
             .create(AikoApiService::class.java)

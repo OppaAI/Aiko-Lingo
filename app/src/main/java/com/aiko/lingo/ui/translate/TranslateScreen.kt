@@ -59,7 +59,7 @@ fun TranslateScreen(
             is TranslateUiState.Success -> {
                 LazyColumn(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                     items(state.translations) { translation ->
-                        TranslationCard(translation)
+                        TranslationCard(translation, onPlayAudio = { viewModel.playAudio(translation.audioUrl) })
                     }
                 }
             }
@@ -70,7 +70,7 @@ fun TranslateScreen(
 }
 
 @Composable
-fun TranslationCard(translation: TranslationResult) {
+fun TranslationCard(translation: TranslationResult, onPlayAudio: () -> Unit) {
     Card(
         modifier = Modifier
             .fillMaxWidth()
@@ -95,7 +95,7 @@ fun TranslationCard(translation: TranslationResult) {
                     fontWeight = FontWeight.Medium
                 )
             }
-            IconButton(onClick = { /* TODO: Play TTS */ }) {
+            IconButton(onClick = onPlayAudio) {
                 Icon(Icons.Default.PlayArrow, contentDescription = "Play TTS")
             }
         }

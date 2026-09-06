@@ -8,6 +8,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.filled.Lightbulb
+import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Stop
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -63,7 +64,7 @@ fun ConversationScreen(
                         verticalArrangement = Arrangement.spacedBy(12.dp)
                     ) {
                         items(dialogue) { entry ->
-                            DialogueBubble(entry)
+                            DialogueBubble(entry, onPlayAudio = { viewModel.playAudio(entry.audioUrl) })
                         }
                         if (karaokeText.isNotEmpty() && (dialogue.isEmpty() || !dialogue.last().isUser)) {
                             item {
@@ -115,7 +116,7 @@ fun LevelButton(label: String, level: String, onClick: (String) -> Unit) {
 }
 
 @Composable
-fun DialogueBubble(entry: DialogueEntry) {
+fun DialogueBubble(entry: DialogueEntry, onPlayAudio: () -> Unit) {
     val alignment = if (entry.isUser) Alignment.End else Alignment.Start
     val color = if (entry.isUser) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.secondary
     val textColor = if (entry.isUser) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSecondary
@@ -126,10 +127,17 @@ fun DialogueBubble(entry: DialogueEntry) {
             shape = RoundedCornerShape(16.dp),
             modifier = Modifier.padding(horizontal = 8.dp)
         ) {
-            Column(modifier = Modifier.padding(12.dp)) {
-                Text(entry.japanese, color = textColor, fontSize = 18.sp)
-                if (entry.english.isNotEmpty()) {
-                    Text(entry.english, color = textColor.copy(alpha = 0.7f), fontSize = 14.sp)
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Column(modifier = Modifier.padding(12.dp).weight(1f, fill = false)) {
+                    Text(entry.japanese, color = textColor, fontSize = 18.sp)
+                    if (entry.english.isNotEmpty()) {
+                        Text(entry.english, color = textColor.copy(alpha = 0.7f), fontSize = 14.sp)
+                    }
+                }
+                if (!entry.isUser && entry.audioUrl != null) {
+                    IconButton(onClick = onPlayAudio) {
+                        Icon(Icons.Default.PlayArrow, contentDescription = "Play", tint = textColor)
+                    }
                 }
             }
         }

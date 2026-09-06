@@ -6,6 +6,8 @@ import com.aiko.lingo.data.model.ConversationRespondRequest
 import com.aiko.lingo.data.model.ConversationResponse
 import com.aiko.lingo.data.model.ConversationStartRequest
 import com.aiko.lingo.data.remote.AikoApiService
+import android.media.AudioAttributes
+import android.media.MediaPlayer
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -56,7 +58,14 @@ class ConversationViewModel(private val apiService: AikoApiService) : ViewModel(
                 val response = apiService.getHint()
                 // Process as Aiko response but maybe flag it as hint
                 animateKaraoke(response.japaneseText)
-                _dialogue.value += DialogueEntry(response.japaneseText, response.englishTranslation, isUser = false, isHint = true)
+                _dialogue.value += DialogueEntry(
+                    japanese = response.japaneseText,
+                    english = response.englishTranslation,
+                    isUser = false,
+                    isHint = true,
+                    audioUrl = response.audioUrl
+                )
+                playAudio(response.audioUrl)
             } catch (e: Exception) {
                 // Ignore hint errors for now
             }
@@ -76,10 +85,47 @@ class ConversationViewModel(private val apiService: AikoApiService) : ViewModel(
 
     private suspend fun processResponse(response: ConversationResponse) {
         animateKaraoke(response.japaneseText)
-        _dialogue.value += DialogueEntry(response.japaneseText, response.englishTranslation, isUser = false)
+        _dialogue.value += DialogueEntry(
+            japanese = response.japaneseText,
+            english = response.englishTranslation,
+            isUser = false,
+            audioUrl = response.audioUrl
+        )
         if (response.isFinished) {
             _uiState.value = ConversationUiState.Finished
         }
+        playAudio(response.audioUrl)
+    }
+
+    private var mediaPlayer: MediaPlayer? = null
+
+    fun playAudio(url: String?) {
+        if (url.isNullOrBlank()) return
+
+        viewModelScope.launch {
+            try {
+                mediaPlayer?.release()
+                mediaPlayer = MediaPlayer().apply {
+                    setDataSource(url)
+                    setAudioAttributes(
+                        AudioAttributes.Builder()
+                            .setContentType(AudioAttributes.CONTENT_TYPE_SPEECH)
+                            .setUsage(AudioAttributes.USAGE_MEDIA)
+                            .build()
+                    )
+                    prepareAsync()
+                    setOnPreparedListener { start() }
+                }
+            } catch (e: Exception) {
+                // Log error
+            }
+        }
+    }
+
+    override fun onCleared() {
+        super.onCleared()
+        mediaPlayer?.release()
+        mediaPlayer = null
     }
 
     private suspend fun animateKaraoke(text: String) {
@@ -95,7 +141,8 @@ data class DialogueEntry(
     val japanese: String,
     val english: String,
     val isUser: Boolean,
-    val isHint: Boolean = false
+    val isHint: Boolean = false,
+    val audioUrl: String? = null
 )
 
 sealed class ConversationUiState {
