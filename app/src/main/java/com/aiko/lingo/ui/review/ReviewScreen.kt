@@ -1,5 +1,13 @@
 package com.aiko.lingo.ui.review
 
+/*
+=====================================================================
+BUGFIX PASS (this version):
+  1. Error state showed red text with no way to recover; added a
+     Retry button wired to viewModel.retryLoadCards().
+=====================================================================
+*/
+
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.ContentTransform
 import androidx.compose.animation.fadeIn
@@ -87,11 +95,27 @@ fun ReviewScreen(
                 )
             }
             is ReviewUiState.Error -> {
-                Text(
-                    "Error: ${(uiState as ReviewUiState.Error).message}",
-                    color = Color.Red,
-                    modifier = Modifier.align(Alignment.CenterHorizontally)
-                )
+                // FIX: add Retry so a failed load/submit isn't a dead end.
+                Column(
+                    modifier = Modifier.fillMaxSize(),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.Center
+                ) {
+                    Text(
+                        "Error: ${(uiState as ReviewUiState.Error).message}",
+                        color = Color.Red,
+                        textAlign = TextAlign.Center
+                    )
+                    Spacer(modifier = Modifier.height(16.dp))
+                    Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                        Button(onClick = { viewModel.retryLoadCards() }) {
+                            Text("Retry")
+                        }
+                        OutlinedButton(onClick = onBack) {
+                            Text("Back")
+                        }
+                    }
+                }
             }
         }
     }
