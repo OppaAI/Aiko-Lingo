@@ -1,5 +1,27 @@
 package com.aiko.lingo.ui.conversation
 
+/*
+=====================================================================
+BUGFIX PASS (this version):
+  1. decodeFromString<StreamChunk>(line) was using the default
+     top-level kotlinx.serialization `Json` object, which throws on
+     unknown JSON keys. The backend's "final" chunk includes a "toast"
+     key (and respond_stream also sends "vocabExtracted"), which are
+     not fields on StreamChunk. That meant EVERY conversation turn hit
+     the catch block and dropped the user into ConversationUiState.Error
+     -- including the very first message when starting a session.
+     Fixed by decoding with a local `Json { ignoreUnknownKeys = true }`
+     instance instead of the default one.
+  2. stop() reset UI state and cleared the dialogue, but never
+     cancelled the coroutine Job running start()/respond()/handleStream().
+     If the user hit stop mid-stream, that orphaned job could keep
+     collecting stream lines in the background and mutate _uiState /
+     _dialogue after the screen had already reset (e.g. reviving
+     Active state or appending a stray dialogue entry). Now the active
+     Job is tracked and explicitly cancelled in stop().
+=====================================================================
+*/
+
 import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
@@ -11,6 +33,7 @@ import com.aiko.lingo.data.remote.AikoApiService
 import android.media.AudioAttributes
 import android.media.MediaPlayer
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -22,6 +45,9 @@ import okhttp3.ResponseBody
 import java.util.concurrent.atomic.AtomicBoolean
 
 class ConversationViewModel(private val apiService: AikoApiService) : ViewModel() {
+
+    // FIX #1: lenient Json instance used for decoding stream chunks.
+    private val json = Json { ignoreUnknownKeys = true }
 
     private val _uiState = MutableStateFlow<ConversationUiState>(ConversationUiState.SelectingLevel)
     val uiState = _uiState.asStateFlow()
@@ -35,8 +61,14 @@ class ConversationViewModel(private val apiService: AikoApiService) : ViewModel(
     // ✅ FIX: Prevent race condition from duplicate respond() calls
     private val isProcessing = AtomicBoolean(false)
 
+    // FIX #2: tracks the currently running start()/respond() job so stop()
+    // can cancel it instead of letting an orphaned stream mutate state
+    // after the screen has already reset.
+    private var activeJob: Job? = null
+
     fun start(level: String) {
-        viewModelScope.launch {
+        activeJob?.cancel()
+        activeJob = viewModelScope.launch {
             _uiState.value = ConversationUiState.Loading
             _karaokeText.value = ""
             try {
@@ -56,7 +88,9 @@ class ConversationViewModel(private val apiService: AikoApiService) : ViewModel(
                     lines.forEach { line ->
                         if (line.isBlank()) return@forEach
                         try {
-                            val chunk = Json.decodeFromString<StreamChunk>(line)
+                            // FIX #1: use the lenient `json` instance, not the
+                            // default kotlinx.serialization Json.decodeFromString.
+                            val chunk = json.decodeFromString<StreamChunk>(line)
                             when (chunk.type) {
                                 "delta" -> {
                                     _karaokeText.value += chunk.text ?: ""
@@ -109,7 +143,8 @@ class ConversationViewModel(private val apiService: AikoApiService) : ViewModel(
             return
         }
 
-        viewModelScope.launch {
+        activeJob?.cancel()
+        activeJob = viewModelScope.launch {
             try {
                 val currentDialogue = _dialogue.value
                 val history = currentDialogue.map { 
@@ -153,6 +188,11 @@ class ConversationViewModel(private val apiService: AikoApiService) : ViewModel(
         val isFinished: Boolean? = null,
         val audioUrl: String? = null,
         val message: String? = null
+        // Note: the backend also sends "toast" and (on respond_stream)
+        // "vocabExtracted" on the final chunk. They're intentionally not
+        // modeled here since the UI doesn't use them yet; `json` is
+        // configured with ignoreUnknownKeys = true so they're safely
+        // skipped rather than causing a parse failure.
     )
 
     fun getHint() {
@@ -174,6 +214,10 @@ class ConversationViewModel(private val apiService: AikoApiService) : ViewModel(
     }
 
     fun stop() {
+        // FIX #2: cancel any in-flight start()/respond() stream job first,
+        // so it can't mutate state after we've already reset the screen.
+        activeJob?.cancel()
+        activeJob = null
         viewModelScope.launch {
             try {
                 apiService.stopConversation()
@@ -296,6 +340,7 @@ class ConversationViewModel(private val apiService: AikoApiService) : ViewModel(
 
     override fun onCleared() {
         super.onCleared()
+        activeJob?.cancel()
         stopAudio()
     }
 }
