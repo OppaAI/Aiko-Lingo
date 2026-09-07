@@ -7,6 +7,11 @@ BUGFIX PASS (this version):
      if it failed there was no way to retry short of navigating away
      and back (which recreates the ViewModel). Added a public
      retryLoadCards() the screen's Error state can call directly.
+
+BUGFIX PASS (this version, cont. -- audit fix #5):
+  2. ReviewResponseData.toast (e.g. "🌟 word = meaning" on an Easy
+     grade) was already modeled but never read. It's now surfaced
+     through a toastMessage StateFlow so ReviewScreen can display it.
 =====================================================================
 */
 
@@ -15,6 +20,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.aiko.lingo.data.model.ReviewCard
 import com.aiko.lingo.data.model.ReviewResponseRequest
+import com.aiko.lingo.data.model.Toast
 import com.aiko.lingo.data.remote.AikoApiService
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -33,6 +39,15 @@ class ReviewViewModel(private val apiService: AikoApiService) : ViewModel() {
 
     private val _reviewsCompleted = MutableStateFlow(0)
     val reviewsCompleted = _reviewsCompleted.asStateFlow()
+
+    // FIX #2: surfaces the toast the backend already sends on review
+    // responses (e.g. an Easy-grade "mastered" celebration).
+    private val _toastMessage = MutableStateFlow<Toast?>(null)
+    val toastMessage = _toastMessage.asStateFlow()
+
+    fun dismissToast() {
+        _toastMessage.value = null
+    }
 
     init {
         startReviewSession()
@@ -70,6 +85,9 @@ class ReviewViewModel(private val apiService: AikoApiService) : ViewModel() {
                     )
                 )
                 _reviewsCompleted.value += 1
+
+                // FIX #2: wire the toast through instead of ignoring it.
+                result.toast?.let { _toastMessage.value = it }
 
                 if (result.next_card != null) {
                     _currentCard.value = result.next_card
