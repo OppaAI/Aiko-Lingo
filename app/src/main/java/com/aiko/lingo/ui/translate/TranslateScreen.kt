@@ -1,5 +1,15 @@
 package com.aiko.lingo.ui.translate
 
+/*
+=====================================================================
+BUGFIX PASS (this version):
+  1. The "Retry" button in the Error state had an empty onClick:
+         Button(onClick = { }) { Text("Retry") }
+     It didn't do anything. Fixed by remembering the last submitted
+     query text and calling viewModel.translate(lastQuery) from Retry.
+=====================================================================
+*/
+
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -26,7 +36,16 @@ fun TranslateScreen(
     onBack: () -> Unit
 ) {
     var inputText by remember { mutableStateOf("") }
+    // FIX #1: remember the last text that was actually submitted, so
+    // Retry can resend it even if the user has since edited the field.
+    var lastQuery by remember { mutableStateOf("") }
     val uiState by viewModel.uiState.collectAsState()
+
+    fun submit(text: String) {
+        if (text.isBlank()) return
+        lastQuery = text
+        viewModel.translate(text)
+    }
 
     Column(
         modifier = Modifier
@@ -52,7 +71,7 @@ fun TranslateScreen(
             // ✅ FIX: Use IconButton instead of Button for trailing icon
             trailingIcon = {
                 IconButton(
-                    onClick = { viewModel.translate(inputText) },
+                    onClick = { submit(inputText) },
                     enabled = inputText.isNotBlank()
                 ) {
                     Icon(Icons.Default.Send, contentDescription = "Translate")
@@ -106,7 +125,12 @@ fun TranslateScreen(
                             color = Color.Red
                         )
                         Spacer(modifier = Modifier.height(16.dp))
-                        Button(onClick = { }) {
+                        // FIX #1: Retry now re-submits the last query instead
+                        // of being a no-op.
+                        Button(
+                            onClick = { submit(lastQuery) },
+                            enabled = lastQuery.isNotBlank()
+                        ) {
                             Text("Retry")
                         }
                     }
