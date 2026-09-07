@@ -78,7 +78,7 @@ class ConversationViewModel(private val apiService: AikoApiService) : ViewModel(
                     isHint = true,
                     audioUrl = response.audioUrl
                 )
-                playAudio(response.audioUrl)
+                playAudio(response.japaneseText, response.audioUrl)
             } catch (e: Exception) {
                 // Ignore hint errors for now
             }
@@ -112,17 +112,20 @@ class ConversationViewModel(private val apiService: AikoApiService) : ViewModel(
         } else {
             _uiState.value = ConversationUiState.Active
         }
-        playAudio(response.audioUrl)
+        playAudio(response.japaneseText, response.audioUrl)
     }
 
     private var mediaPlayer: MediaPlayer? = null
 
-    fun playAudio(url: String?) {
-        if (url.isNullOrBlank()) return
+    fun playAudio(text: String, existingUrl: String? = null) {
+        if (text.isBlank() && existingUrl.isNullOrBlank()) return
 
+        stopAudio()
+        
         viewModelScope.launch {
             try {
-                mediaPlayer?.release()
+                val url = existingUrl ?: apiService.getTts(text).audioUrl
+                
                 mediaPlayer = MediaPlayer().apply {
                     setDataSource(url)
                     setAudioAttributes(
@@ -133,10 +136,25 @@ class ConversationViewModel(private val apiService: AikoApiService) : ViewModel(
                     )
                     prepareAsync()
                     setOnPreparedListener { start() }
+                    setOnCompletionListener { 
+                        release()
+                        mediaPlayer = null
+                    }
                 }
             } catch (e: Exception) {
                 // Log error
             }
+        }
+    }
+
+    fun stopAudio() {
+        try {
+            mediaPlayer?.stop()
+            mediaPlayer?.release()
+        } catch (e: Exception) {
+            // Ignore stop errors
+        } finally {
+            mediaPlayer = null
         }
     }
 

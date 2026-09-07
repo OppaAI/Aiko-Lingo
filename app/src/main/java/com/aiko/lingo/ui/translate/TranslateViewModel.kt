@@ -20,7 +20,14 @@ class TranslateViewModel(private val apiService: AikoApiService) : ViewModel() {
         if (text.isBlank()) return
 
         viewModelScope.launch {
-            _uiState.value = TranslateUiState.Loading
+            val currentState = _uiState.value
+            if (currentState is TranslateUiState.Success) {
+                _uiState.value = currentState.copy(isRefreshing = true)
+            } else {
+                _uiState.value = TranslateUiState.Loading
+            }
+            
+            stopAudio() // Stop any current playback when a new translation starts
             try {
                 val response = apiService.translate(TranslateRequest(text))
                 _uiState.value = TranslateUiState.Success(response.translations)
@@ -31,13 +38,19 @@ class TranslateViewModel(private val apiService: AikoApiService) : ViewModel() {
     }
 
     private var mediaPlayer: MediaPlayer? = null
+    private var isAudioLoading = MutableStateFlow(false)
+    val audioLoading = isAudioLoading.asStateFlow()
 
-    fun playAudio(url: String?) {
-        if (url.isNullOrBlank()) return
+    fun playAudio(text: String, existingUrl: String? = null) {
+        if (text.isBlank() && existingUrl.isNullOrBlank()) return
 
+        stopAudio()
+        
         viewModelScope.launch {
             try {
-                mediaPlayer?.release()
+                isAudioLoading.value = true
+                val url = existingUrl ?: apiService.getTts(text).audioUrl
+                
                 mediaPlayer = MediaPlayer().apply {
                     setDataSource(url)
                     setAudioAttributes(
@@ -47,24 +60,45 @@ class TranslateViewModel(private val apiService: AikoApiService) : ViewModel() {
                             .build()
                     )
                     prepareAsync()
-                    setOnPreparedListener { start() }
+                    setOnPreparedListener { 
+                        isAudioLoading.value = false
+                        start() 
+                    }
+                    setOnCompletionListener { 
+                        release()
+                        mediaPlayer = null
+                    }
                 }
             } catch (e: Exception) {
+                isAudioLoading.value = false
                 // Log error
             }
         }
     }
 
+    fun stopAudio() {
+        try {
+            mediaPlayer?.stop()
+            mediaPlayer?.release()
+        } catch (e: Exception) {
+            // Ignore stop errors
+        } finally {
+            mediaPlayer = null
+        }
+    }
+
     override fun onCleared() {
         super.onCleared()
-        mediaPlayer?.release()
-        mediaPlayer = null
+        stopAudio()
     }
 }
 
 sealed class TranslateUiState {
     object Idle : TranslateUiState()
-    object Loading : TranslateUiState()
-    data class Success(val translations: List<TranslationResult>) : TranslateUiState()
+    object Loading : TranslateUiState() // Initial loading
+    data class Success(
+        val translations: List<TranslationResult>,
+        val isRefreshing: Boolean = false
+    ) : TranslateUiState()
     data class Error(val message: String) : TranslateUiState()
 }

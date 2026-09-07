@@ -56,11 +56,16 @@ fun TranslateScreen(
         Spacer(modifier = Modifier.height(24.dp))
 
         when (val state = uiState) {
-            TranslateUiState.Loading -> CircularProgressIndicator(modifier = Modifier.align(Alignment.CenterHorizontally))
+            TranslateUiState.Loading -> Box(modifier = Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) { CircularProgressIndicator() }
             is TranslateUiState.Success -> {
-                LazyColumn(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                    items(state.translations) { translation ->
-                        TranslationCard(translation, onPlayAudio = { viewModel.playAudio(translation.audioUrl) })
+                Column {
+                    if (state.isRefreshing) {
+                        LinearProgressIndicator(modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp))
+                    }
+                    LazyColumn(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                        items(state.translations) { translation ->
+                            TranslationCard(translation, onPlayAudio = { viewModel.playAudio(translation.text) })
+                        }
                     }
                 }
             }

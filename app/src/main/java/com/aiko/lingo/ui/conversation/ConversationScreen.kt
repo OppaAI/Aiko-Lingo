@@ -74,7 +74,7 @@ fun ConversationScreen(
                         contentPadding = PaddingValues(bottom = 16.dp)
                     ) {
                         items(dialogue) { entry ->
-                            DialogueBubble(entry, onPlayAudio = { viewModel.playAudio(entry.audioUrl) })
+                            DialogueBubble(entry, onPlayAudio = { viewModel.playAudio(entry.japanese, entry.audioUrl) })
                         }
                         
                         if (state is ConversationUiState.ActiveLoading) {

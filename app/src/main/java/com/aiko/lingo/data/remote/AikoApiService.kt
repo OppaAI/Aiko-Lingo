@@ -1,8 +1,8 @@
 package com.aiko.lingo.data.remote
 
 import com.aiko.lingo.data.model.*
-import retrofit2.http.Body
-import retrofit2.http.POST
+import retrofit2.http.*
+import kotlinx.serialization.Serializable
 
 interface AikoApiService {
     @POST("api/english/translate")
@@ -19,4 +19,10 @@ interface AikoApiService {
 
     @POST("api/english/conversation/stop")
     suspend fun stopConversation(): Unit
+
+    @GET("api/english/tts")
+    suspend fun getTts(@Query("text") text: String): TtsResponse
 }
+
+@Serializable
+data class TtsResponse(val audioUrl: String)
