@@ -1,5 +1,6 @@
 package com.aiko.lingo
 
+import android.content.Context
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -52,17 +53,42 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
         setContent {
-            var darkTheme by remember { mutableStateOf(false) }
+            // ✅ FIX: Load theme preference from SharedPreferences
+            val savedDarkTheme = loadThemePreference()
+            var darkTheme by remember { mutableStateOf(savedDarkTheme) }
             
             AikoLingoTheme(darkTheme = darkTheme) {
                 Surface(
                     modifier = Modifier.fillMaxSize(),
                     color = MaterialTheme.colorScheme.background
                 ) {
-                    AikoLingoApp(apiService, onToggleTheme = { darkTheme = !darkTheme })
+                    AikoLingoApp(
+                        apiService,
+                        onToggleTheme = {
+                            darkTheme = !darkTheme
+                            // ✅ FIX: Persist theme preference
+                            saveThemePreference(darkTheme)
+                        }
+                    )
                 }
             }
         }
+    }
+
+    // ✅ NEW: Helper functions for theme persistence
+    private fun loadThemePreference(): Boolean {
+        val prefs = getSharedPreferences(THEME_PREFS, Context.MODE_PRIVATE)
+        return prefs.getBoolean(DARK_THEME_KEY, false)
+    }
+
+    private fun saveThemePreference(isDarkTheme: Boolean) {
+        val prefs = getSharedPreferences(THEME_PREFS, Context.MODE_PRIVATE)
+        prefs.edit().putBoolean(DARK_THEME_KEY, isDarkTheme).apply()
+    }
+
+    companion object {
+        private const val THEME_PREFS = "aiko_theme_prefs"
+        private const val DARK_THEME_KEY = "dark_theme"
     }
 }
 
