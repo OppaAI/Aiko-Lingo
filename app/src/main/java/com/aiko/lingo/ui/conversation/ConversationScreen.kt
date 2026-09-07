@@ -7,6 +7,13 @@ BUGFIX PASS (this version):
      except backing all the way out of the screen. Added a Retry button
      that calls viewModel.retryLast(), which resends whichever of
      start()/respond() most recently failed.
+
+BUGFIX PASS (this version, cont. -- audit fix):
+  2. `toastMessage` used to be local state that nothing ever wrote to
+     (dead code -- the toast the backend sends on the "final" stream
+     chunk was silently dropped). It's now collected from
+     viewModel.toastMessage, which ConversationViewModel populates from
+     the stream's toast field (and from playAudio() failures).
 =====================================================================
 */
 
@@ -38,8 +45,9 @@ fun ConversationScreen(
     val uiState by viewModel.uiState.collectAsState()
     val dialogue by viewModel.dialogue.collectAsState()
     val karaokeText by viewModel.karaokeText.collectAsState()
+    // FIX #2: now sourced from the ViewModel instead of dead local state.
+    val toast by viewModel.toastMessage.collectAsState()
     val listState = rememberLazyListState()
-    var toastMessage by remember { mutableStateOf<String?>(null) }
 
     // Auto scroll to bottom
     LaunchedEffect(dialogue.size, karaokeText) {
@@ -154,19 +162,21 @@ fun ConversationScreen(
             }
         }
 
-        // Toast notification
-        toastMessage?.let { message ->
+        // Toast notification -- FIX #2: driven by the backend's toast
+        // (via ConversationViewModel), not dead local state.
+        toast?.let { t ->
             Toast(
-                message = message,
-                onDismiss = { toastMessage = null },
+                message = t.message,
+                onDismiss = { viewModel.dismissToast() },
+                isError = t.type == "error",
                 modifier = Modifier
                     .align(Alignment.BottomCenter)
                     .padding(16.dp)
             )
-            
-            LaunchedEffect(Unit) {
+
+            LaunchedEffect(t) {
                 kotlinx.coroutines.delay(3000)
-                toastMessage = null
+                viewModel.dismissToast()
             }
         }
     }
@@ -176,20 +186,21 @@ fun ConversationScreen(
 fun Toast(
     message: String,
     onDismiss: () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    isError: Boolean = false
 ) {
     Card(
         modifier = modifier
             .fillMaxWidth(0.9f)
             .clip(RoundedCornerShape(12.dp)),
         colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.secondary
+            containerColor = if (isError) MaterialTheme.colorScheme.errorContainer else MaterialTheme.colorScheme.secondary
         )
     ) {
         Text(
             message,
             modifier = Modifier.padding(12.dp),
-            color = MaterialTheme.colorScheme.onSecondary,
+            color = if (isError) MaterialTheme.colorScheme.onErrorContainer else MaterialTheme.colorScheme.onSecondary,
             fontSize = 14.sp
         )
     }
