@@ -33,6 +33,18 @@ BUGFIX PASS (this version, cont.):
      resets to Active (if there's prior dialogue) or SelectingLevel-safe
      Active state isn't assumed; we simply surface Error and let Retry
      replay the same text, matching the intent of fix #3.
+
+BUGFIX PASS (this version, cont. -- audit fixes):
+  5. StreamChunk now decodes the backend's "toast" field (it was
+     previously deliberately dropped via ignoreUnknownKeys). It's
+     surfaced through a new `toastMessage` StateFlow so
+     ConversationScreen can actually display the toast the backend
+     already generates (e.g. "Perfect! Let's keep talking.") instead of
+     silently discarding it.
+  6. playAudio() previously failed completely silently on error --
+     including on a TTS rate-limit response (HTTP 429), which just
+     looked like a dead Play button. It now surfaces a toast so the
+     user knows what happened instead of tapping Play repeatedly.
 =====================================================================
 */
 
@@ -43,6 +55,7 @@ import com.aiko.lingo.data.model.ConversationRespondRequest
 import com.aiko.lingo.data.model.ConversationResponse
 import com.aiko.lingo.data.model.ConversationStartRequest
 import com.aiko.lingo.data.model.DialogueHistoryEntry
+import com.aiko.lingo.data.model.Toast
 import com.aiko.lingo.data.remote.AikoApiService
 import android.media.AudioAttributes
 import android.media.MediaPlayer
@@ -56,6 +69,7 @@ import kotlinx.coroutines.withContext
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 import okhttp3.ResponseBody
+import retrofit2.HttpException
 import java.util.concurrent.atomic.AtomicBoolean
 
 class ConversationViewModel(private val apiService: AikoApiService) : ViewModel() {
@@ -71,6 +85,16 @@ class ConversationViewModel(private val apiService: AikoApiService) : ViewModel(
 
     private val _karaokeText = MutableStateFlow("")
     val karaokeText = _karaokeText.asStateFlow()
+
+    // FIX #5: toast surfaced from the backend's "final" stream chunk (or from
+    // a playAudio() failure). ConversationScreen collects this to render its
+    // Toast composable instead of maintaining its own dead local state.
+    private val _toastMessage = MutableStateFlow<Toast?>(null)
+    val toastMessage = _toastMessage.asStateFlow()
+
+    fun dismissToast() {
+        _toastMessage.value = null
+    }
 
     // ✅ FIX: Prevent race condition from duplicate respond() calls
     private val isProcessing = AtomicBoolean(false)
@@ -133,6 +157,10 @@ class ConversationViewModel(private val apiService: AikoApiService) : ViewModel(
                                     withContext(Dispatchers.Main) {
                                         _karaokeText.value = "" // Clear typewriter text before adding to dialogue list
                                         processResponse(finalResponse, shouldAnimate = false)
+                                        // FIX #5: surface the backend's toast (e.g.
+                                        // "Perfect! Let's keep talking.") instead of
+                                        // dropping it on the floor.
+                                        chunk.toast?.let { _toastMessage.value = it }
                                     }
                                 }
                                 "error" -> {
@@ -233,12 +261,14 @@ class ConversationViewModel(private val apiService: AikoApiService) : ViewModel(
         val suggestion: String? = null,
         val isFinished: Boolean? = null,
         val audioUrl: String? = null,
-        val message: String? = null
-        // Note: the backend also sends "toast" and (on respond_stream)
-        // "vocabExtracted" on the final chunk. They're intentionally not
-        // modeled here since the UI doesn't use them yet; `json` is
-        // configured with ignoreUnknownKeys = true so they're safely
-        // skipped rather than causing a parse failure.
+        val message: String? = null,
+        // FIX #5: previously intentionally omitted -- now decoded and wired
+        // into `toastMessage` so the UI can actually show it.
+        val toast: Toast? = null
+        // Note: respond_stream also sends "vocabExtracted" on the final
+        // chunk. It's intentionally not modeled here since the UI doesn't
+        // use it yet; `json` is configured with ignoreUnknownKeys = true so
+        // it's safely skipped rather than causing a parse failure.
     )
 
     fun getHint() {
@@ -338,6 +368,9 @@ class ConversationViewModel(private val apiService: AikoApiService) : ViewModel(
                     }
                     setOnErrorListener { mp, what, extra ->
                         Log.e("Lingo", "MediaPlayer error: what=$what, extra=$extra")
+                        // FIX #6: give the user feedback on playback failure
+                        // instead of leaving them wondering why nothing played.
+                        _toastMessage.value = Toast(type = "error", message = "Audio playback failed.")
                         try {
                             mp?.release()
                         } catch (e: Exception) {
@@ -350,7 +383,14 @@ class ConversationViewModel(private val apiService: AikoApiService) : ViewModel(
                 mediaPlayer = currentPlayer
             } catch (e: Exception) {
                 Log.e("Lingo", "Audio playback error", e)
-                // ✅ FIX: Properly cleanup on error
+                // FIX #6: previously fully silent. Now distinguishes a TTS
+                // rate-limit response (HTTP 429) from other failures so the
+                // user understands why the Play button did nothing.
+                _toastMessage.value = if (e is HttpException && e.code() == 429) {
+                    Toast(type = "error", message = "Audio rate limit reached. Please wait a moment.")
+                } else {
+                    Toast(type = "error", message = "Couldn't play audio right now.")
+                }
                 try {
                     currentPlayer?.release()
                 } catch (releaseError: Exception) {
