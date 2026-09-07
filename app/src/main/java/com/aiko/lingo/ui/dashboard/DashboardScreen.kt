@@ -1,7 +1,20 @@
 package com.aiko.lingo.ui.dashboard
 
+/*
+=====================================================================
+BUGFIX PASS (this version):
+  1. Error state had no retry affordance -- added a Retry button
+     calling viewModel.refreshStats().
+  2. Added a "Practice These" row driven by the new
+     StatsResponse.weak_vocab field (cards with a high review-failure
+     rate), matching the weak-vocab backend endpoint / SRS addition.
+=====================================================================
+*/
+
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
@@ -16,6 +29,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.aiko.lingo.data.model.ReviewCard
 import com.aiko.lingo.data.model.StatsResponse
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -60,7 +74,19 @@ fun DashboardScreen(
                 DashboardContent(state.stats, onNavigateToReview)
             }
             is DashboardUiState.Error -> {
-                Text("Error: ${state.message}", color = Color.Red, modifier = Modifier.align(Alignment.CenterHorizontally))
+                // FIX: was a dead-end red text label with no way to recover
+                // short of leaving the screen.
+                Column(
+                    modifier = Modifier.fillMaxSize(),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.Center
+                ) {
+                    Text("Error: ${state.message}", color = Color.Red, textAlign = TextAlign.Center)
+                    Spacer(modifier = Modifier.height(16.dp))
+                    Button(onClick = { viewModel.refreshStats() }) {
+                        Text("Retry")
+                    }
+                }
             }
         }
     }
@@ -82,6 +108,14 @@ private fun DashboardContent(stats: StatsResponse, onNavigateToReview: () -> Uni
         // Stats Grid
         StatsGrid(stats)
 
+        // NEW: Weak vocab widget -- surfaces cards with a high failure rate
+        // so the user can jump straight to their trouble spots instead of
+        // grinding through the full review queue in order.
+        if (stats.weak_vocab.isNotEmpty()) {
+            Spacer(modifier = Modifier.height(16.dp))
+            WeakVocabCard(stats.weak_vocab, onNavigateToReview)
+        }
+
         Spacer(modifier = Modifier.height(16.dp))
 
         // Review Button
@@ -96,6 +130,72 @@ private fun DashboardContent(stats: StatsResponse, onNavigateToReview: () -> Uni
                 Icon(Icons.Default.Refresh, contentDescription = "Review")
                 Spacer(modifier = Modifier.width(8.dp))
                 Text("Review ${stats.cards_due} cards", fontSize = 16.sp)
+            }
+        }
+    }
+}
+
+@Composable
+private fun WeakVocabCard(weakVocab: List<ReviewCard>, onNavigateToReview: () -> Unit) {
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(16.dp)),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.errorContainer
+        )
+    ) {
+        Column(modifier = Modifier.padding(16.dp)) {
+            Text(
+                "🎯 Practice These",
+                style = MaterialTheme.typography.titleSmall,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.onErrorContainer
+            )
+            Text(
+                "Words you've been missing lately",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onErrorContainer
+            )
+            Spacer(modifier = Modifier.height(12.dp))
+            LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                items(weakVocab.take(6), key = { it.card_id }) { card ->
+                    Card(
+                        modifier = Modifier
+                            .width(110.dp)
+                            .clip(RoundedCornerShape(12.dp)),
+                        colors = CardDefaults.cardColors(
+                            containerColor = MaterialTheme.colorScheme.surface
+                        )
+                    ) {
+                        Column(
+                            modifier = Modifier
+                                .padding(10.dp)
+                                .fillMaxWidth(),
+                            horizontalAlignment = Alignment.CenterHorizontally
+                        ) {
+                            Text(
+                                card.hiragana,
+                                fontSize = 16.sp,
+                                fontWeight = FontWeight.Bold,
+                                textAlign = TextAlign.Center,
+                                maxLines = 1
+                            )
+                            Spacer(modifier = Modifier.height(4.dp))
+                            Text(
+                                card.meaning,
+                                fontSize = 11.sp,
+                                textAlign = TextAlign.Center,
+                                maxLines = 2,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    }
+                }
+            }
+            Spacer(modifier = Modifier.height(12.dp))
+            TextButton(onClick = onNavigateToReview) {
+                Text("Review now →")
             }
         }
     }
