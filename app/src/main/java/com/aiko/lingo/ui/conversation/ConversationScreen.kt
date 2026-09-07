@@ -1,5 +1,15 @@
 package com.aiko.lingo.ui.conversation
 
+/*
+=====================================================================
+BUGFIX PASS (this version):
+  1. Error state previously just showed red text with no way forward
+     except backing all the way out of the screen. Added a Retry button
+     that calls viewModel.retryLast(), which resends whichever of
+     start()/respond() most recently failed.
+=====================================================================
+*/
+
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -67,7 +77,25 @@ fun ConversationScreen(
                 ConversationUiState.Loading -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { 
                     CircularProgressIndicator() 
                 }
-                is ConversationUiState.Error -> Text("Error: ${state.message}", color = Color.Red)
+                is ConversationUiState.Error -> {
+                    // FIX: give the user a way forward instead of a dead end.
+                    Column(
+                        modifier = Modifier.fillMaxSize(),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.Center
+                    ) {
+                        Text("Error: ${state.message}", color = Color.Red, textAlign = androidx.compose.ui.text.style.TextAlign.Center)
+                        Spacer(modifier = Modifier.height(16.dp))
+                        Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                            Button(onClick = { viewModel.retryLast() }) {
+                                Text("Retry")
+                            }
+                            OutlinedButton(onClick = { viewModel.stop() }) {
+                                Text("Back to Menu")
+                            }
+                        }
+                    }
+                }
                 ConversationUiState.Active, ConversationUiState.ActiveLoading, ConversationUiState.Finished -> {
                     Column(
                         modifier = Modifier
