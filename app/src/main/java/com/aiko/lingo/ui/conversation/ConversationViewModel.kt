@@ -1,5 +1,6 @@
 package com.aiko.lingo.ui.conversation
 
+import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.aiko.lingo.data.model.ConversationRespondRequest
@@ -13,6 +14,9 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import kotlinx.serialization.Serializable
+import kotlinx.serialization.json.Json
+import okhttp3.ResponseBody
 
 class ConversationViewModel(private val apiService: AikoApiService) : ViewModel() {
 
@@ -28,12 +32,45 @@ class ConversationViewModel(private val apiService: AikoApiService) : ViewModel(
     fun start(level: String) {
         viewModelScope.launch {
             _uiState.value = ConversationUiState.Loading
+            _karaokeText.value = ""
             try {
-                val response = apiService.startConversation(ConversationStartRequest(level))
-                processResponse(response)
-                _uiState.value = ConversationUiState.Active
+                val responseBody = apiService.startConversationStream(ConversationStartRequest(level))
+                handleStream(responseBody)
             } catch (e: Exception) {
                 _uiState.value = ConversationUiState.Error(e.message ?: "Failed to start")
+            }
+        }
+    }
+
+    private suspend fun handleStream(responseBody: ResponseBody) {
+        responseBody.byteStream().bufferedReader().useLines { lines ->
+            lines.forEach { line ->
+                if (line.isBlank()) return@forEach
+                try {
+                    val chunk = Json.decodeFromString<StreamChunk>(line)
+                    when (chunk.type) {
+                        "delta" -> {
+                            _karaokeText.value += chunk.text ?: ""
+                        }
+                        "final" -> {
+                            val finalResponse = ConversationResponse(
+                                japaneseText = chunk.japanese ?: "",
+                                englishTranslation = chunk.english ?: "",
+                                audioUrl = chunk.audioUrl,
+                                isFinished = chunk.isFinished ?: false,
+                                isCorrect = chunk.isCorrect ?: true,
+                                feedback = chunk.feedback,
+                                suggestion = chunk.suggestion
+                            )
+                            processResponse(finalResponse, shouldAnimate = false)
+                        }
+                        "error" -> {
+                            _uiState.value = ConversationUiState.Error(chunk.message ?: "Stream error")
+                        }
+                    }
+                } catch (e: Exception) {
+                    Log.e("Lingo", "Stream parse error: ${e.message} for line: $line")
+                }
             }
         }
     }
@@ -51,34 +88,46 @@ class ConversationViewModel(private val apiService: AikoApiService) : ViewModel(
             // Add user entry first
             _dialogue.value += DialogueEntry(text, "", isUser = true)
             
-            // Set to loading but keep the conversation on screen
+            // Set to loading
             _uiState.value = ConversationUiState.ActiveLoading 
+            _karaokeText.value = "" 
             
             try {
-                val response = apiService.respondToConversation(
+                val responseBody = apiService.respondToConversationStream(
                     ConversationRespondRequest(text = text, history = history)
                 )
-                processResponse(response)
+                handleStream(responseBody)
             } catch (e: Exception) {
                 _uiState.value = ConversationUiState.Error(e.message ?: "Failed to respond")
             }
         }
     }
 
+    @Serializable
+    data class StreamChunk(
+        val type: String,
+        val text: String? = null,
+        val japanese: String? = null,
+        val english: String? = null,
+        val isCorrect: Boolean? = null,
+        val feedback: String? = null,
+        val suggestion: String? = null,
+        val isFinished: Boolean? = null,
+        val audioUrl: String? = null,
+        val message: String? = null
+    )
+
     fun getHint() {
         viewModelScope.launch {
             try {
                 val response = apiService.getHint()
-                // Process as Aiko response but maybe flag it as hint
-                animateKaraoke(response.japaneseText)
-                _dialogue.value += DialogueEntry(
-                    japanese = response.japaneseText,
-                    english = response.englishTranslation,
-                    isUser = false,
-                    isHint = true,
-                    audioUrl = response.audioUrl
+                val mappedResponse = ConversationResponse(
+                    japaneseText = response.japaneseText,
+                    englishTranslation = response.englishTranslation,
+                    audioUrl = response.audioUrl,
+                    isCorrect = true
                 )
-                playAudio(response.japaneseText, response.audioUrl)
+                processResponse(mappedResponse, shouldAnimate = true, isHint = true)
             } catch (e: Exception) {
                 // Ignore hint errors for now
             }
@@ -96,17 +145,22 @@ class ConversationViewModel(private val apiService: AikoApiService) : ViewModel(
         }
     }
 
-    private suspend fun processResponse(response: ConversationResponse) {
-        animateKaraoke(response.japaneseText)
+    private suspend fun processResponse(response: ConversationResponse, shouldAnimate: Boolean = true, isHint: Boolean = false) {
+        if (shouldAnimate) {
+            animateKaraoke(response.japaneseText)
+        }
+        
         _dialogue.value += DialogueEntry(
             japanese = response.japaneseText,
             english = response.englishTranslation,
             isUser = false,
+            isHint = isHint,
             audioUrl = response.audioUrl,
             isCorrect = response.isCorrect,
             feedback = response.feedback,
             suggestion = response.suggestion
         )
+        
         if (response.isFinished) {
             _uiState.value = ConversationUiState.Finished
         } else {
@@ -160,8 +214,7 @@ class ConversationViewModel(private val apiService: AikoApiService) : ViewModel(
 
     override fun onCleared() {
         super.onCleared()
-        mediaPlayer?.release()
-        mediaPlayer = null
+        stopAudio()
     }
 
     private suspend fun animateKaraoke(text: String) {
