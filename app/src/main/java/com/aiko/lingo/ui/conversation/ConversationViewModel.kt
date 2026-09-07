@@ -19,6 +19,7 @@ import kotlinx.coroutines.withContext
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 import okhttp3.ResponseBody
+import java.util.concurrent.atomic.AtomicBoolean
 
 class ConversationViewModel(private val apiService: AikoApiService) : ViewModel() {
 
@@ -30,6 +31,9 @@ class ConversationViewModel(private val apiService: AikoApiService) : ViewModel(
 
     private val _karaokeText = MutableStateFlow("")
     val karaokeText = _karaokeText.asStateFlow()
+
+    // ✅ FIX: Prevent race condition from duplicate respond() calls
+    private val isProcessing = AtomicBoolean(false)
 
     fun start(level: String) {
         viewModelScope.launch {
@@ -47,69 +51,92 @@ class ConversationViewModel(private val apiService: AikoApiService) : ViewModel(
 
     private suspend fun handleStream(responseBody: ResponseBody) {
         withContext(Dispatchers.IO) {
-            responseBody.byteStream().bufferedReader().useLines { lines ->
-                lines.forEach { line ->
-                    if (line.isBlank()) return@forEach
-                    try {
-                        val chunk = Json.decodeFromString<StreamChunk>(line)
-                        when (chunk.type) {
-                            "delta" -> {
-                                _karaokeText.value += chunk.text ?: ""
-                            }
-                            "final" -> {
-                                val finalResponse = ConversationResponse(
-                                    japaneseText = chunk.japanese ?: "",
-                                    englishTranslation = chunk.english ?: "",
-                                    audioUrl = chunk.audioUrl,
-                                    isFinished = chunk.isFinished ?: false,
-                                    isCorrect = chunk.isCorrect ?: true,
-                                    feedback = chunk.feedback,
-                                    suggestion = chunk.suggestion
-                                )
-                                // Return to Main thread to update state
-                                withContext(Dispatchers.Main) {
-                                    _karaokeText.value = "" // Clear typewriter text before adding to dialogue list
-                                    processResponse(finalResponse, shouldAnimate = false)
+            try {
+                responseBody.byteStream().bufferedReader().useLines { lines ->
+                    lines.forEach { line ->
+                        if (line.isBlank()) return@forEach
+                        try {
+                            val chunk = Json.decodeFromString<StreamChunk>(line)
+                            when (chunk.type) {
+                                "delta" -> {
+                                    _karaokeText.value += chunk.text ?: ""
+                                }
+                                "final" -> {
+                                    val finalResponse = ConversationResponse(
+                                        japaneseText = chunk.japanese ?: "",
+                                        englishTranslation = chunk.english ?: "",
+                                        audioUrl = chunk.audioUrl,
+                                        isFinished = chunk.isFinished ?: false,
+                                        isCorrect = chunk.isCorrect ?: true,
+                                        feedback = chunk.feedback,
+                                        suggestion = chunk.suggestion
+                                    )
+                                    // Return to Main thread to update state
+                                    withContext(Dispatchers.Main) {
+                                        _karaokeText.value = "" // Clear typewriter text before adding to dialogue list
+                                        processResponse(finalResponse, shouldAnimate = false)
+                                    }
+                                }
+                                "error" -> {
+                                    withContext(Dispatchers.Main) {
+                                        _uiState.value = ConversationUiState.Error(chunk.message ?: "Stream error")
+                                    }
                                 }
                             }
-                            "error" -> {
-                                withContext(Dispatchers.Main) {
-                                    _uiState.value = ConversationUiState.Error(chunk.message ?: "Stream error")
-                                }
+                        } catch (e: Exception) {
+                            Log.e("Lingo", "Stream parse error: ${e.message} for line: $line", e)
+                            // ✅ FIX: Notify user of parsing error instead of silently failing
+                            withContext(Dispatchers.Main) {
+                                _uiState.value = ConversationUiState.Error("Failed to parse response: ${e.message}")
                             }
+                            return@useLines
                         }
-                    } catch (e: Exception) {
-                        Log.e("Lingo", "Stream parse error: ${e.message} for line: $line")
                     }
+                }
+            } catch (e: Exception) {
+                Log.e("Lingo", "Stream reading failed", e)
+                withContext(Dispatchers.Main) {
+                    _uiState.value = ConversationUiState.Error("Connection error: ${e.message}")
                 }
             }
         }
     }
 
     fun respond(text: String) {
-        viewModelScope.launch {
-            val currentDialogue = _dialogue.value
-            val history = currentDialogue.map { 
-                DialogueHistoryEntry(
-                    speaker = if (it.isUser) "student" else "aiko",
-                    text = it.japanese
-                )
-            }
+        // ✅ FIX: Prevent race condition by blocking duplicate calls
+        if (!isProcessing.compareAndSet(false, true)) {
+            Log.w("Lingo", "Already processing a response, ignoring duplicate call")
+            return
+        }
 
-            // Add user entry first
-            _dialogue.value += DialogueEntry(text, "", isUser = true)
-            
-            // Set to loading
-            _uiState.value = ConversationUiState.ActiveLoading 
-            _karaokeText.value = "" 
-            
+        viewModelScope.launch {
             try {
-                val responseBody = apiService.respondToConversationStream(
-                    ConversationRespondRequest(text = text, history = history)
-                )
-                handleStream(responseBody)
-            } catch (e: Exception) {
-                _uiState.value = ConversationUiState.Error(e.message ?: "Failed to respond")
+                val currentDialogue = _dialogue.value
+                val history = currentDialogue.map { 
+                    DialogueHistoryEntry(
+                        speaker = if (it.isUser) "student" else "aiko",
+                        text = it.japanese
+                    )
+                }
+
+                // Add user entry first
+                _dialogue.value += DialogueEntry(text, "", isUser = true)
+                
+                // Set to loading
+                _uiState.value = ConversationUiState.ActiveLoading 
+                _karaokeText.value = "" 
+                
+                try {
+                    val responseBody = apiService.respondToConversationStream(
+                        ConversationRespondRequest(text = text, history = history)
+                    )
+                    handleStream(responseBody)
+                } catch (e: Exception) {
+                    _uiState.value = ConversationUiState.Error(e.message ?: "Failed to respond")
+                }
+            } finally {
+                // ✅ FIX: Always reset processing flag
+                isProcessing.set(false)
             }
         }
     }
@@ -140,6 +167,7 @@ class ConversationViewModel(private val apiService: AikoApiService) : ViewModel(
                 )
                 processResponse(mappedResponse, shouldAnimate = true, isHint = true)
             } catch (e: Exception) {
+                Log.e("Lingo", "Hint request failed", e)
                 // Ignore hint errors for now
             }
         }
@@ -152,6 +180,7 @@ class ConversationViewModel(private val apiService: AikoApiService) : ViewModel(
             } finally {
                 _uiState.value = ConversationUiState.SelectingLevel
                 _dialogue.value = emptyList()
+                isProcessing.set(false)
             }
         }
     }
@@ -188,10 +217,11 @@ class ConversationViewModel(private val apiService: AikoApiService) : ViewModel(
         stopAudio()
         
         viewModelScope.launch {
+            var currentPlayer: MediaPlayer? = null
             try {
                 val url = existingUrl ?: apiService.getTts(text).audioUrl
                 
-                mediaPlayer = MediaPlayer().apply {
+                currentPlayer = MediaPlayer().apply {
                     setDataSource(url)
                     setAudioAttributes(
                         AudioAttributes.Builder()
@@ -200,22 +230,53 @@ class ConversationViewModel(private val apiService: AikoApiService) : ViewModel(
                             .build()
                     )
                     prepareAsync()
-                    setOnPreparedListener { start() }
+                    setOnPreparedListener { 
+                        try {
+                            start()
+                        } catch (e: Exception) {
+                            Log.e("Lingo", "Failed to start audio playback", e)
+                        }
+                    }
                     setOnCompletionListener { 
-                        release()
+                        try {
+                            release()
+                        } catch (e: Exception) {
+                            Log.e("Lingo", "Error releasing media player", e)
+                        }
                         mediaPlayer = null
                     }
+                    setOnErrorListener { mp, what, extra ->
+                        Log.e("Lingo", "MediaPlayer error: what=$what, extra=$extra")
+                        try {
+                            mp?.release()
+                        } catch (e: Exception) {
+                            Log.e("Lingo", "Error releasing media player on error", e)
+                        }
+                        mediaPlayer = null
+                        true
+                    }
                 }
+                mediaPlayer = currentPlayer
             } catch (e: Exception) {
-                // Log error
+                Log.e("Lingo", "Audio playback error", e)
+                // ✅ FIX: Properly cleanup on error
+                try {
+                    currentPlayer?.release()
+                } catch (releaseError: Exception) {
+                    Log.e("Lingo", "Error releasing media player after exception", releaseError)
+                }
+                mediaPlayer = null
             }
         }
     }
 
     private suspend fun animateKaraoke(text: String) {
+        // ✅ FIX: Use StringBuilder instead of string concatenation (O(n) instead of O(n²))
+        val sb = StringBuilder()
         _karaokeText.value = ""
         text.forEach { char ->
-            _karaokeText.value += char
+            sb.append(char)
+            _karaokeText.value = sb.toString()
             delay(50) // Typewriter speed
         }
         delay(300)
@@ -227,7 +288,7 @@ class ConversationViewModel(private val apiService: AikoApiService) : ViewModel(
             mediaPlayer?.stop()
             mediaPlayer?.release()
         } catch (e: Exception) {
-            // Ignore stop errors
+            Log.e("Lingo", "Error stopping audio", e)
         } finally {
             mediaPlayer = null
         }
@@ -254,7 +315,7 @@ sealed class ConversationUiState {
     object SelectingLevel : ConversationUiState()
     object Loading : ConversationUiState()
     object Active : ConversationUiState()
-    object ActiveLoading : ConversationUiState() // Added for non-blocking loading
+    object ActiveLoading : ConversationUiState()
     object Finished : ConversationUiState()
     data class Error(val message: String) : ConversationUiState()
 }
