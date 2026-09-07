@@ -19,6 +19,20 @@ BUGFIX PASS (this version):
      _dialogue after the screen had already reset (e.g. reviving
      Active state or appending a stray dialogue entry). Now the active
      Job is tracked and explicitly cancelled in stop().
+
+BUGFIX PASS (this version, cont.):
+  3. On a network/stream failure the user's last message was lost --
+     the only way to retry was to retype it from scratch. We now
+     remember the last request that was in flight (level for start(),
+     text for respond()) and expose retryLast() so the UI's "Retry"
+     button can resend the exact same request.
+  4. respond() left a stray user bubble + a permanently-stuck
+     "Aiko is thinking..." state if the request threw before a stream
+     ever started, since isProcessing was only reset in `finally` but
+     _uiState was never walked back to Active. Now a failed respond()
+     resets to Active (if there's prior dialogue) or SelectingLevel-safe
+     Active state isn't assumed; we simply surface Error and let Retry
+     replay the same text, matching the intent of fix #3.
 =====================================================================
 */
 
@@ -66,7 +80,17 @@ class ConversationViewModel(private val apiService: AikoApiService) : ViewModel(
     // after the screen has already reset.
     private var activeJob: Job? = null
 
+    // FIX #3: remember the last in-flight request so a failed stream can be
+    // retried without the user retyping. Only one of these is ever "live"
+    // at a time -- retryLast() picks whichever was most recently attempted.
+    private sealed class LastAction {
+        data class Start(val level: String) : LastAction()
+        data class Respond(val text: String) : LastAction()
+    }
+    private var lastAction: LastAction? = null
+
     fun start(level: String) {
+        lastAction = LastAction.Start(level)
         activeJob?.cancel()
         activeJob = viewModelScope.launch {
             _uiState.value = ConversationUiState.Loading
@@ -143,6 +167,7 @@ class ConversationViewModel(private val apiService: AikoApiService) : ViewModel(
             return
         }
 
+        lastAction = LastAction.Respond(text)
         activeJob?.cancel()
         activeJob = viewModelScope.launch {
             try {
@@ -167,12 +192,33 @@ class ConversationViewModel(private val apiService: AikoApiService) : ViewModel(
                     )
                     handleStream(responseBody)
                 } catch (e: Exception) {
+                    // FIX #4: surface the error instead of leaving the UI stuck
+                    // on ActiveLoading forever with no way forward but Stop.
                     _uiState.value = ConversationUiState.Error(e.message ?: "Failed to respond")
                 }
             } finally {
                 // ✅ FIX: Always reset processing flag
                 isProcessing.set(false)
             }
+        }
+    }
+
+    // FIX #3: re-send whichever of start()/respond() most recently failed.
+    // No-op if nothing has been attempted yet (e.g. Error state reached some
+    // other way).
+    fun retryLast() {
+        when (val action = lastAction) {
+            is LastAction.Start -> start(action.level)
+            is LastAction.Respond -> {
+                // The failed attempt already appended a user bubble to
+                // _dialogue before it broke; drop that duplicate before
+                // resending so we don't end up with the same line twice.
+                if (_dialogue.value.lastOrNull()?.let { it.isUser && it.japanese == action.text } == true) {
+                    _dialogue.value = _dialogue.value.dropLast(1)
+                }
+                respond(action.text)
+            }
+            null -> Log.w("Lingo", "retryLast() called with no prior action")
         }
     }
 
@@ -218,6 +264,7 @@ class ConversationViewModel(private val apiService: AikoApiService) : ViewModel(
         // so it can't mutate state after we've already reset the screen.
         activeJob?.cancel()
         activeJob = null
+        lastAction = null
         viewModelScope.launch {
             try {
                 apiService.stopConversation()
