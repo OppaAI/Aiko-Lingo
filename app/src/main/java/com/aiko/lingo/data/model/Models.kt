@@ -92,7 +92,9 @@ data class ReviewResponseRequest(
 data class ReviewResponseData(
     val updated_card: UpdatedCard,
     val next_card: ReviewCard?,
-    val cards_remaining: Int
+    val cards_remaining: Int,
+    // NEW: optional toast from review_respond (e.g. "🌟 word = meaning" on Easy grade)
+    val toast: Toast? = null
 )
 
 @Serializable
@@ -115,7 +117,11 @@ data class StatsResponse(
     val streak: Streak,
     val xp: Int,
     val level: Int,
-    val last_level: String
+    val last_level: String,
+    // NEW: cards the user is struggling with (>50% failure rate), for the
+    // "Practice These" widget on the dashboard. Defaults to empty so older
+    // backend responses without this field still deserialize fine.
+    val weak_vocab: List<ReviewCard> = emptyList()
 )
 
 @Serializable
