@@ -7,6 +7,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.Send
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -44,33 +45,79 @@ fun TranslateScreen(
         OutlinedTextField(
             value = inputText,
             onValueChange = { inputText = it },
-            modifier = Modifier.fillMaxWidth().imePadding(),
+            modifier = Modifier
+                .fillMaxWidth()
+                .imePadding(),
             placeholder = { Text("Enter English to translate...") },
+            // ✅ FIX: Use IconButton instead of Button for trailing icon
             trailingIcon = {
-                Button(onClick = { viewModel.translate(inputText) }) {
-                    Text("Go")
+                IconButton(
+                    onClick = { viewModel.translate(inputText) },
+                    enabled = inputText.isNotBlank()
+                ) {
+                    Icon(Icons.Default.Send, contentDescription = "Translate")
                 }
-            }
+            },
+            singleLine = true
         )
 
         Spacer(modifier = Modifier.height(24.dp))
 
         when (val state = uiState) {
-            TranslateUiState.Loading -> Box(modifier = Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) { CircularProgressIndicator() }
+            TranslateUiState.Loading -> {
+                Box(
+                    modifier = Modifier.fillMaxWidth(),
+                    contentAlignment = Alignment.Center
+                ) {
+                    CircularProgressIndicator()
+                }
+            }
             is TranslateUiState.Success -> {
                 Column {
                     if (state.isRefreshing) {
-                        LinearProgressIndicator(modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp))
+                        LinearProgressIndicator(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(bottom = 8.dp)
+                        )
                     }
+                    // ✅ FIX: Add keys for proper recomposition tracking
                     LazyColumn(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                        items(state.translations) { translation ->
-                            TranslationCard(translation, onPlayAudio = { viewModel.playAudio(translation.text) })
+                        items(
+                            state.translations,
+                            key = { translation -> "${translation.text}-${translation.register}" }
+                        ) { translation ->
+                            TranslationCard(
+                                translation,
+                                onPlayAudio = { viewModel.playAudio(translation.text) }
+                            )
                         }
                     }
                 }
             }
-            is TranslateUiState.Error -> Text("Error: ${state.message}", color = Color.Red)
-            TranslateUiState.Idle -> Text("Enter something to translate ♡", modifier = Modifier.align(Alignment.CenterHorizontally))
+            is TranslateUiState.Error -> {
+                Box(
+                    modifier = Modifier.fillMaxWidth(),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        Text(
+                            "Error: ${state.message}",
+                            color = Color.Red
+                        )
+                        Spacer(modifier = Modifier.height(16.dp))
+                        Button(onClick = { }) {
+                            Text("Retry")
+                        }
+                    }
+                }
+            }
+            TranslateUiState.Idle -> {
+                Text(
+                    "Enter something to translate ♡",
+                    modifier = Modifier.align(Alignment.CenterHorizontally)
+                )
+            }
         }
     }
 }
@@ -101,8 +148,17 @@ fun TranslationCard(translation: TranslationResult, onPlayAudio: () -> Unit) {
                     fontWeight = FontWeight.Medium
                 )
             }
+            // ✅ NEW: Show audio URL availability
             IconButton(onClick = onPlayAudio) {
-                Icon(Icons.Default.PlayArrow, contentDescription = "Play TTS")
+                Icon(
+                    Icons.Default.PlayArrow,
+                    contentDescription = "Play TTS",
+                    tint = if (translation.audioUrl != null) {
+                        MaterialTheme.colorScheme.primary
+                    } else {
+                        Color.Gray
+                    }
+                )
             }
         }
     }
