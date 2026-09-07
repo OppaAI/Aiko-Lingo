@@ -233,7 +233,7 @@ Customize the conversation difficulty curve via `app/src/main/res/values/config.
 ## Development Roadmap
 
 ### Phase 1 (Current)
-- [x] v.0.0.1 - Simple prototype
+- [x] v.0.1.0 - Simple prototype
 - [ ] Basic translation endpoint integration
 - [ ] Simple conversation flow (start → respond → stop)
 
