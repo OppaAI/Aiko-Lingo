@@ -10,7 +10,10 @@
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
 ![Status](https://img.shields.io/badge/Status-experimental-orange.svg)
 
-**Front:**
+**Frontend:**
+![Kotlin](https://img.shields.io/badge/Kotlin-2.0-7F52FF?logo=kotlin&logoColor=white)
+![Jetpack Compose](https://img.shields.io/badge/Jetpack%20Compose-1.6-4285F4?logo=android&logoColor=white)
+![Android](https://img.shields.io/badge/Android-SDK%2034+-3DDC84?logo=android&logoColor=white)
 
 **Backend:**
 ![LLM](https://img.shields.io/badge/Runtime-llama.cpp-967BB6?logo=ai&logoColor=white)
@@ -22,9 +25,9 @@
 
 ## Demo
 
-> Click the following image to watch on YouTube ▶
+> **Click the thumbnail below to watch on YouTube** ▶
 
-[![Watch the demo]([https://youtu.be/VGHBMMFskCQ](https://www.youtube.com/watch?v=xRtCmtZQgwI))
+[![Aiko-Lingo Demo](https://img.youtube.com/vi/xRtCmtZQgwI/maxresdefault.jpg)](https://www.youtube.com/watch?v=xRtCmtZQgwI)
 
 ---
 
@@ -47,7 +50,7 @@
   - Responsive mobile layouts, tested on Firefox Android
 
 ### Planned
-- **Speech I/O** – Voice input (via cellphone) and audio response (TTS via MioTTS)
+- **Speech I/O** – Voice input (via microphone) and audio response (TTS via MioTTS)
 - **Spaced Repetition** – Integration with Aiko's memory system for adaptive vocabulary recall
 - **User Progress Tracking** – Session history, vocabulary mastery scoring, personalized recommendations
 - **Offline Mode** – Cached vocabularies and common phrases for low-connectivity scenarios
@@ -231,6 +234,19 @@ Customize the conversation difficulty curve via `app/src/main/res/values/config.
 
 ### Phase 1 (Current)
 - [x] v.0.0.1 - Simple prototype
+- [ ] Basic translation endpoint integration
+- [ ] Simple conversation flow (start → respond → stop)
+
+### Phase 2 (Next)
+- [ ] Real-time speech I/O (microphone input + TTS output)
+- [ ] Hint system with adaptive difficulty
+- [ ] Session persistence (save & resume learning)
+
+### Phase 3 (Future)
+- [ ] Integration with Aiko-chan's memory system (spaced repetition)
+- [ ] Offline vocabulary cache
+- [ ] Companion widget (quick translation from homescreen)
+- [ ] User progress dashboard
 
 ---
 
@@ -296,7 +312,7 @@ For architectural decisions or design feedback, open an Issue first to discuss.
 
 ## License
 
-MIT License. See [LICENSE](./LICENSE) for details.
+Apache 2.0 License. See [LICENSE](./LICENSE) for details.
 
 ---
 
