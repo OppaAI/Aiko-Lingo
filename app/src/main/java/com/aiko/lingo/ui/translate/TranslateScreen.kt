@@ -7,6 +7,15 @@ BUGFIX PASS (this version):
          Button(onClick = { }) { Text("Retry") }
      It didn't do anything. Fixed by remembering the last submitted
      query text and calling viewModel.translate(lastQuery) from Retry.
+
+BUGFIX PASS (this version, cont.):
+  2. TranslateViewModel already exposed `audioLoading: StateFlow<Boolean>`
+     but TranslateScreen never collected it, so tapping the play button
+     gave zero feedback while TTS was being generated (which can take a
+     couple of seconds) -- it looked like the button just did nothing.
+     TranslationCard now takes the ViewModel, collects audioLoading, and
+     swaps the icon for a small spinner while a fetch is in flight,
+     disabling the button so repeated taps can't pile up requests.
 =====================================================================
 */
 
@@ -107,8 +116,9 @@ fun TranslateScreen(
                             key = { translation -> "${translation.text}-${translation.register}" }
                         ) { translation ->
                             TranslationCard(
-                                translation,
-                                onPlayAudio = { viewModel.playAudio(translation.text) }
+                                translation = translation,
+                                viewModel = viewModel,
+                                onPlayAudio = { viewModel.playAudio(translation.text, translation.audioUrl) }
                             )
                         }
                     }
@@ -147,7 +157,15 @@ fun TranslateScreen(
 }
 
 @Composable
-fun TranslationCard(translation: TranslationResult, onPlayAudio: () -> Unit) {
+fun TranslationCard(
+    translation: TranslationResult,
+    viewModel: TranslateViewModel,
+    onPlayAudio: () -> Unit
+) {
+    // FIX #2: this was previously ignored entirely -- the ViewModel tracked
+    // loading state but nothing in the UI ever read it.
+    val isAudioLoading by viewModel.audioLoading.collectAsState()
+
     Card(
         modifier = Modifier
             .fillMaxWidth()
@@ -172,17 +190,28 @@ fun TranslationCard(translation: TranslationResult, onPlayAudio: () -> Unit) {
                     fontWeight = FontWeight.Medium
                 )
             }
-            // ✅ NEW: Show audio URL availability
-            IconButton(onClick = onPlayAudio) {
-                Icon(
-                    Icons.Default.PlayArrow,
-                    contentDescription = "Play TTS",
-                    tint = if (translation.audioUrl != null) {
-                        MaterialTheme.colorScheme.primary
-                    } else {
-                        Color.Gray
-                    }
-                )
+            // FIX #2: show a spinner and disable the button while TTS is
+            // being fetched, instead of giving no feedback at all.
+            IconButton(
+                onClick = onPlayAudio,
+                enabled = !isAudioLoading
+            ) {
+                if (isAudioLoading) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(20.dp),
+                        strokeWidth = 2.dp
+                    )
+                } else {
+                    Icon(
+                        Icons.Default.PlayArrow,
+                        contentDescription = "Play TTS",
+                        tint = if (translation.audioUrl != null) {
+                            MaterialTheme.colorScheme.primary
+                        } else {
+                            Color.Gray
+                        }
+                    )
+                }
             }
         }
     }
