@@ -1,6 +1,5 @@
 package com.aiko.lingo
 
-import android.content.Context
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -21,9 +20,15 @@ import androidx.navigation.compose.rememberNavController
 import com.aiko.lingo.data.remote.AikoApiService
 import com.aiko.lingo.ui.conversation.ConversationScreen
 import com.aiko.lingo.ui.conversation.ConversationViewModel
-import com.aiko.lingo.ui.theme.AikoLingoTheme
 import com.aiko.lingo.ui.translate.TranslateScreen
 import com.aiko.lingo.ui.translate.TranslateViewModel
+import com.aiko.lingo.ui.dashboard.DashboardScreen
+import com.aiko.lingo.ui.dashboard.DashboardViewModel
+import com.aiko.lingo.ui.review.ReviewScreen
+import com.aiko.lingo.ui.review.ReviewViewModel
+import com.aiko.lingo.ui.leaderboard.LeaderboardScreen
+import com.aiko.lingo.ui.leaderboard.LeaderboardViewModel
+import com.aiko.lingo.ui.theme.AikoLingoTheme
 import retrofit2.converter.kotlinx.serialization.asConverterFactory
 import kotlinx.serialization.json.Json
 import okhttp3.MediaType.Companion.toMediaType
@@ -53,42 +58,17 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
         setContent {
-            // ✅ FIX: Load theme preference from SharedPreferences
-            val savedDarkTheme = loadThemePreference()
-            var darkTheme by remember { mutableStateOf(savedDarkTheme) }
+            var darkTheme by remember { mutableStateOf(false) }
             
             AikoLingoTheme(darkTheme = darkTheme) {
                 Surface(
                     modifier = Modifier.fillMaxSize(),
                     color = MaterialTheme.colorScheme.background
                 ) {
-                    AikoLingoApp(
-                        apiService,
-                        onToggleTheme = {
-                            darkTheme = !darkTheme
-                            // ✅ FIX: Persist theme preference
-                            saveThemePreference(darkTheme)
-                        }
-                    )
+                    AikoLingoApp(apiService, onToggleTheme = { darkTheme = !darkTheme })
                 }
             }
         }
-    }
-
-    // ✅ NEW: Helper functions for theme persistence
-    private fun loadThemePreference(): Boolean {
-        val prefs = getSharedPreferences(THEME_PREFS, Context.MODE_PRIVATE)
-        return prefs.getBoolean(DARK_THEME_KEY, false)
-    }
-
-    private fun saveThemePreference(isDarkTheme: Boolean) {
-        val prefs = getSharedPreferences(THEME_PREFS, Context.MODE_PRIVATE)
-        prefs.edit().putBoolean(DARK_THEME_KEY, isDarkTheme).apply()
-    }
-
-    companion object {
-        private const val THEME_PREFS = "aiko_theme_prefs"
-        private const val DARK_THEME_KEY = "dark_theme"
     }
 }
 
@@ -102,6 +82,8 @@ private fun AikoLingoApp(apiService: AikoApiService, onToggleTheme: () -> Unit) 
             MainMenu(
                 onNavigateToTranslate = { navController.navigate("translate") },
                 onNavigateToConversation = { navController.navigate("conversation") },
+                onNavigateToDashboard = { navController.navigate("dashboard") },
+                onNavigateToLeaderboard = { navController.navigate("leaderboard") },
                 onToggleTheme = onToggleTheme
             )
         }
@@ -113,6 +95,22 @@ private fun AikoLingoApp(apiService: AikoApiService, onToggleTheme: () -> Unit) 
             val vm: ConversationViewModel = viewModel(factory = factory)
             ConversationScreen(vm, onBack = { navController.popBackStack() })
         }
+        composable("dashboard") {
+            val vm: DashboardViewModel = viewModel(factory = factory)
+            DashboardScreen(
+                vm,
+                onBack = { navController.popBackStack() },
+                onNavigateToReview = { navController.navigate("review") }
+            )
+        }
+        composable("review") {
+            val vm: ReviewViewModel = viewModel(factory = factory)
+            ReviewScreen(vm, onBack = { navController.popBackStack() })
+        }
+        composable("leaderboard") {
+            val vm: LeaderboardViewModel = viewModel(factory = factory)
+            LeaderboardScreen(vm, onBack = { navController.popBackStack() })
+        }
     }
 }
 
@@ -120,6 +118,8 @@ private fun AikoLingoApp(apiService: AikoApiService, onToggleTheme: () -> Unit) 
 fun MainMenu(
     onNavigateToTranslate: () -> Unit,
     onNavigateToConversation: () -> Unit,
+    onNavigateToDashboard: () -> Unit,
+    onNavigateToLeaderboard: () -> Unit,
     onToggleTheme: () -> Unit
 ) {
     Column(
@@ -144,6 +144,12 @@ fun MainMenu(
         }
         Button(onClick = onNavigateToConversation, modifier = Modifier.padding(top = 12.dp).fillMaxWidth(0.7f)) {
             Text("♡  Conversation")
+        }
+        Button(onClick = onNavigateToDashboard, modifier = Modifier.padding(top = 12.dp).fillMaxWidth(0.7f)) {
+            Text("📊  Dashboard")
+        }
+        Button(onClick = onNavigateToLeaderboard, modifier = Modifier.padding(top = 12.dp).fillMaxWidth(0.7f)) {
+            Text("🏆  Leaderboard")
         }
         
         Spacer(modifier = Modifier.height(48.dp))
