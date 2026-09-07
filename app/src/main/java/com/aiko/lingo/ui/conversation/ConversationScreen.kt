@@ -29,127 +29,141 @@ fun ConversationScreen(
     val dialogue by viewModel.dialogue.collectAsState()
     val karaokeText by viewModel.karaokeText.collectAsState()
     val listState = rememberLazyListState()
+    var toastMessage by remember { mutableStateOf<String?>(null) }
 
-    // ✅ FIX: Only scroll when dialogue list changes, NOT on every karaoke text update
-    // This prevents excessive recomposition and animations
-    LaunchedEffect(dialogue.size) {
+    // Auto scroll to bottom
+    LaunchedEffect(dialogue.size, karaokeText) {
         if (dialogue.isNotEmpty()) {
             listState.animateScrollToItem(dialogue.size - 1)
         }
     }
 
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .safeDrawingPadding()
-            .padding(16.dp)
-    ) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            TextButton(onClick = onBack) { Text("← Back") }
-            Spacer(modifier = Modifier.width(8.dp))
-            Text("Conversation", style = MaterialTheme.typography.headlineMedium)
-            Spacer(modifier = Modifier.weight(1f))
-            if (uiState is ConversationUiState.Active || uiState is ConversationUiState.ActiveLoading) {
-                IconButton(
-                    onClick = { viewModel.stop() },
-                    colors = IconButtonDefaults.iconButtonColors(contentColor = Color.Red)
-                ) {
-                    Icon(Icons.Default.Stop, contentDescription = "Stop")
-                }
-            }
-        }
-
-        Spacer(modifier = Modifier.height(16.dp))
-
-        when (val state = uiState) {
-            ConversationUiState.SelectingLevel -> LevelSelection { viewModel.start(it) }
-            ConversationUiState.Loading -> {
-                Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                    CircularProgressIndicator()
-                }
-            }
-            is ConversationUiState.Error -> {
-                Box(
-                    modifier = Modifier.fillMaxSize(),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        Text("Error: ${state.message}", color = Color.Red)
-                        Spacer(modifier = Modifier.height(16.dp))
-                        Button(onClick = { viewModel.stop() }) {
-                            Text("Return to Menu")
-                        }
+    Box(modifier = Modifier.fillMaxSize()) {
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .safeDrawingPadding()
+                .padding(16.dp)
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                TextButton(onClick = onBack) { Text("← Back") }
+                Spacer(modifier = Modifier.width(8.dp))
+                Text("Conversation", style = MaterialTheme.typography.headlineMedium)
+                Spacer(modifier = Modifier.weight(1f))
+                if (uiState is ConversationUiState.Active) {
+                    IconButton(
+                        onClick = { viewModel.stop() },
+                        colors = IconButtonDefaults.iconButtonColors(contentColor = Color.Red)
+                    ) {
+                        Icon(Icons.Default.Stop, contentDescription = "Stop")
                     }
                 }
             }
-            ConversationUiState.Active, ConversationUiState.ActiveLoading, ConversationUiState.Finished -> {
-                Column(
-                    modifier = Modifier
-                        .weight(1f)
-                        .imePadding()
-                ) {
-                    LazyColumn(
-                        modifier = Modifier.weight(1f),
-                        state = listState,
-                        verticalArrangement = Arrangement.spacedBy(12.dp),
-                        contentPadding = PaddingValues(bottom = 16.dp)
+
+            Spacer(modifier = Modifier.height(16.dp))
+
+            when (val state = uiState) {
+                ConversationUiState.SelectingLevel -> LevelSelection { viewModel.start(it) }
+                ConversationUiState.Loading -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { 
+                    CircularProgressIndicator() 
+                }
+                is ConversationUiState.Error -> Text("Error: ${state.message}", color = Color.Red)
+                ConversationUiState.Active, ConversationUiState.ActiveLoading, ConversationUiState.Finished -> {
+                    Column(
+                        modifier = Modifier
+                            .weight(1f)
+                            .imePadding()
                     ) {
-                        items(
-                            dialogue,
-                            key = { index, entry -> "$index-${entry.japanese}-${entry.isUser}" }  // ✅ FIX: Add key for better recomposition
-                        ) { entry ->
-                            DialogueBubble(
-                                entry,
-                                onPlayAudio = { viewModel.playAudio(entry.japanese, entry.audioUrl) }
-                            )
-                        }
-                        
-                        if (state is ConversationUiState.ActiveLoading) {
-                            item {
-                                Row(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .padding(8.dp),
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    CircularProgressIndicator(
-                                        modifier = Modifier.size(20.dp),
-                                        strokeWidth = 2.dp,
-                                        color = MaterialTheme.colorScheme.primary
-                                    )
-                                    Spacer(modifier = Modifier.width(12.dp))
-                                    Text(
-                                        "Aiko is thinking...",
-                                        style = MaterialTheme.typography.labelSmall
-                                    )
+                        LazyColumn(
+                            modifier = Modifier.weight(1f),
+                            state = listState,
+                            verticalArrangement = Arrangement.spacedBy(12.dp),
+                            contentPadding = PaddingValues(bottom = 16.dp)
+                        ) {
+                            items(dialogue) { entry ->
+                                DialogueBubble(entry, onPlayAudio = { viewModel.playAudio(entry.japanese, entry.audioUrl) })
+                            }
+                            
+                            if (state is ConversationUiState.ActiveLoading) {
+                                item {
+                                    Row(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .padding(8.dp),
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        CircularProgressIndicator(
+                                            modifier = Modifier.size(20.dp),
+                                            strokeWidth = 2.dp,
+                                            color = MaterialTheme.colorScheme.primary
+                                        )
+                                        Spacer(modifier = Modifier.width(12.dp))
+                                        Text("Aiko is thinking...", style = MaterialTheme.typography.labelSmall)
+                                    }
+                                }
+                            }
+
+                            if (karaokeText.isNotEmpty() && (dialogue.isEmpty() || !dialogue.last().isUser)) {
+                                item {
+                                    KaraokeBubble(karaokeText)
                                 }
                             }
                         }
 
-                        if (karaokeText.isNotEmpty() && (dialogue.isEmpty() || !dialogue.last().isUser)) {
-                            item {
-                                KaraokeBubble(karaokeText)
+                        if (state is ConversationUiState.Active || state is ConversationUiState.ActiveLoading) {
+                            ResponseInput(
+                                onSend = { viewModel.respond(it) },
+                                onHint = { viewModel.getHint() },
+                                enabled = state is ConversationUiState.Active
+                            )
+                        } else {
+                            Button(onClick = { viewModel.stop() }, modifier = Modifier.fillMaxWidth()) {
+                                Text("Return to Menu")
                             }
-                        }
-                    }
-
-                    if (state is ConversationUiState.Active || state is ConversationUiState.ActiveLoading) {
-                        ResponseInput(
-                            onSend = { viewModel.respond(it) },
-                            onHint = { viewModel.getHint() },
-                            enabled = state is ConversationUiState.Active
-                        )
-                    } else {
-                        Button(
-                            onClick = { viewModel.stop() },
-                            modifier = Modifier.fillMaxWidth()
-                        ) {
-                            Text("Return to Menu")
                         }
                     }
                 }
             }
         }
+
+        // Toast notification
+        toastMessage?.let { message ->
+            Toast(
+                message = message,
+                onDismiss = { toastMessage = null },
+                modifier = Modifier
+                    .align(Alignment.BottomCenter)
+                    .padding(16.dp)
+            )
+            
+            LaunchedEffect(Unit) {
+                kotlinx.coroutines.delay(3000)
+                toastMessage = null
+            }
+        }
+    }
+}
+
+@Composable
+fun Toast(
+    message: String,
+    onDismiss: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Card(
+        modifier = modifier
+            .fillMaxWidth(0.9f)
+            .clip(RoundedCornerShape(12.dp)),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.secondary
+        )
+    ) {
+        Text(
+            message,
+            modifier = Modifier.padding(12.dp),
+            color = MaterialTheme.colorScheme.onSecondary,
+            fontSize = 14.sp
+        )
     }
 }
 
@@ -184,16 +198,8 @@ fun LevelButton(label: String, level: String, onClick: (String) -> Unit) {
 @Composable
 fun DialogueBubble(entry: DialogueEntry, onPlayAudio: () -> Unit) {
     val alignment = if (entry.isUser) Alignment.End else Alignment.Start
-    val color = if (entry.isUser) {
-        MaterialTheme.colorScheme.primary
-    } else {
-        MaterialTheme.colorScheme.secondary
-    }
-    val textColor = if (entry.isUser) {
-        MaterialTheme.colorScheme.onPrimary
-    } else {
-        MaterialTheme.colorScheme.onSecondary
-    }
+    val color = if (entry.isUser) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.secondary
+    val textColor = if (entry.isUser) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSecondary
 
     Column(modifier = Modifier.fillMaxWidth(), horizontalAlignment = alignment) {
         Surface(
@@ -205,39 +211,22 @@ fun DialogueBubble(entry: DialogueEntry, onPlayAudio: () -> Unit) {
                 Column(modifier = Modifier.padding(12.dp).weight(1f, fill = false)) {
                     Text(entry.japanese, color = textColor, fontSize = 18.sp)
                     if (entry.english.isNotEmpty()) {
-                        Text(
-                            entry.english,
-                            color = textColor.copy(alpha = 0.7f),
-                            fontSize = 14.sp
-                        )
+                        Text(entry.english, color = textColor.copy(alpha = 0.7f), fontSize = 14.sp)
                     }
-                    // ✅ NEW: Show feedback and suggestions if available
-                    if (!entry.isUser) {
-                        if (!entry.feedback.isNullOrEmpty()) {
-                            Text(
-                                entry.feedback,
-                                color = textColor.copy(alpha = 0.8f),
-                                fontSize = 12.sp,
-                                fontWeight = FontWeight.SemiBold
-                            )
-                        }
-                        if (!entry.suggestion.isNullOrEmpty()) {
-                            Text(
-                                "Suggestion: ${entry.suggestion}",
-                                color = textColor.copy(alpha = 0.7f),
-                                fontSize = 12.sp,
-                                style = MaterialTheme.typography.labelSmall
-                            )
-                        }
+                    // Show feedback if there was a mistake
+                    if (entry.feedback != null && !entry.isCorrect) {
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Text("📝 ${entry.feedback}", color = Color.Yellow, fontSize = 12.sp)
+                    }
+                    // Show suggestion if there was a mistake
+                    if (entry.suggestion != null && !entry.isCorrect) {
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Text("✏️ ${entry.suggestion}", color = textColor.copy(alpha = 0.8f), fontSize = 12.sp)
                     }
                 }
                 if (!entry.isUser && entry.audioUrl != null) {
                     IconButton(onClick = onPlayAudio) {
-                        Icon(
-                            Icons.Default.PlayArrow,
-                            contentDescription = "Play",
-                            tint = textColor
-                        )
+                        Icon(Icons.Default.PlayArrow, contentDescription = "Play", tint = textColor)
                     }
                 }
             }
@@ -252,12 +241,7 @@ fun KaraokeBubble(text: String) {
         shape = RoundedCornerShape(16.dp),
         modifier = Modifier.padding(horizontal = 8.dp)
     ) {
-        Text(
-            text,
-            modifier = Modifier.padding(12.dp),
-            fontSize = 18.sp,
-            fontWeight = FontWeight.Bold
-        )
+        Text(text, modifier = Modifier.padding(12.dp), fontSize = 18.sp, fontWeight = FontWeight.Bold)
     }
 }
 
@@ -271,15 +255,8 @@ fun ResponseInput(onSend: (String) -> Unit, onHint: () -> Unit, enabled: Boolean
             .padding(top = 8.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        IconButton(
-            onClick = onHint,
-            enabled = enabled
-        ) {
-            Icon(
-                Icons.Default.Lightbulb,
-                contentDescription = "Hint",
-                tint = if (enabled) Color.Yellow else Color.Gray
-            )
+        IconButton(onClick = onHint, enabled = enabled) {
+            Icon(Icons.Default.Lightbulb, contentDescription = "Hint", tint = if (enabled) Color.Yellow else Color.Gray)
         }
         OutlinedTextField(
             value = text,
@@ -287,22 +264,10 @@ fun ResponseInput(onSend: (String) -> Unit, onHint: () -> Unit, enabled: Boolean
             modifier = Modifier.weight(1f),
             placeholder = { Text("Reply to Aiko...") },
             shape = RoundedCornerShape(24.dp),
-            enabled = enabled,
-            singleLine = true
-        )
-        IconButton(
-            onClick = {
-                if (text.isNotBlank()) {
-                    onSend(text)
-                    text = ""
-                }
-            },
             enabled = enabled
-        ) {
-            Icon(
-                Icons.AutoMirrored.Filled.Send,
-                contentDescription = "Send"
-            )
+        )
+        IconButton(onClick = { if (text.isNotBlank()) { onSend(text); text = "" } }, enabled = enabled) {
+            Icon(Icons.AutoMirrored.Filled.Send, contentDescription = "Send")
         }
     }
 }
