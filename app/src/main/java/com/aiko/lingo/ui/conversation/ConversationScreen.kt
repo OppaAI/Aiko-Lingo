@@ -79,8 +79,17 @@ fun ConversationScreen(
                         
                         if (state is ConversationUiState.ActiveLoading) {
                             item {
-                                Box(modifier = Modifier.fillMaxWidth().padding(8.dp), contentAlignment = Alignment.CenterStart) {
-                                    CircularProgressIndicator(modifier = Modifier.size(24.dp))
+                                Row(
+                                    modifier = Modifier.fillMaxWidth().padding(8.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    CircularProgressIndicator(
+                                        modifier = Modifier.size(20.dp),
+                                        strokeWidth = 2.dp,
+                                        color = MaterialTheme.colorScheme.primary
+                                    )
+                                    Spacer(modifier = Modifier.width(12.dp))
+                                    Text("Aiko is thinking...", style = MaterialTheme.typography.labelSmall)
                                 }
                             }
                         }

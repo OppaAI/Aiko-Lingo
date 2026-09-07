@@ -10,10 +10,12 @@ import com.aiko.lingo.data.model.DialogueHistoryEntry
 import com.aiko.lingo.data.remote.AikoApiService
 import android.media.AudioAttributes
 import android.media.MediaPlayer
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 import okhttp3.ResponseBody
@@ -37,39 +39,48 @@ class ConversationViewModel(private val apiService: AikoApiService) : ViewModel(
                 val responseBody = apiService.startConversationStream(ConversationStartRequest(level))
                 handleStream(responseBody)
             } catch (e: Exception) {
+                Log.e("Lingo", "Start failed", e)
                 _uiState.value = ConversationUiState.Error(e.message ?: "Failed to start")
             }
         }
     }
 
     private suspend fun handleStream(responseBody: ResponseBody) {
-        responseBody.byteStream().bufferedReader().useLines { lines ->
-            lines.forEach { line ->
-                if (line.isBlank()) return@forEach
-                try {
-                    val chunk = Json.decodeFromString<StreamChunk>(line)
-                    when (chunk.type) {
-                        "delta" -> {
-                            _karaokeText.value += chunk.text ?: ""
+        withContext(Dispatchers.IO) {
+            responseBody.byteStream().bufferedReader().useLines { lines ->
+                lines.forEach { line ->
+                    if (line.isBlank()) return@forEach
+                    try {
+                        val chunk = Json.decodeFromString<StreamChunk>(line)
+                        when (chunk.type) {
+                            "delta" -> {
+                                _karaokeText.value += chunk.text ?: ""
+                            }
+                            "final" -> {
+                                val finalResponse = ConversationResponse(
+                                    japaneseText = chunk.japanese ?: "",
+                                    englishTranslation = chunk.english ?: "",
+                                    audioUrl = chunk.audioUrl,
+                                    isFinished = chunk.isFinished ?: false,
+                                    isCorrect = chunk.isCorrect ?: true,
+                                    feedback = chunk.feedback,
+                                    suggestion = chunk.suggestion
+                                )
+                                // Return to Main thread to update state
+                                withContext(Dispatchers.Main) {
+                                    _karaokeText.value = "" // Clear typewriter text before adding to dialogue list
+                                    processResponse(finalResponse, shouldAnimate = false)
+                                }
+                            }
+                            "error" -> {
+                                withContext(Dispatchers.Main) {
+                                    _uiState.value = ConversationUiState.Error(chunk.message ?: "Stream error")
+                                }
+                            }
                         }
-                        "final" -> {
-                            val finalResponse = ConversationResponse(
-                                japaneseText = chunk.japanese ?: "",
-                                englishTranslation = chunk.english ?: "",
-                                audioUrl = chunk.audioUrl,
-                                isFinished = chunk.isFinished ?: false,
-                                isCorrect = chunk.isCorrect ?: true,
-                                feedback = chunk.feedback,
-                                suggestion = chunk.suggestion
-                            )
-                            processResponse(finalResponse, shouldAnimate = false)
-                        }
-                        "error" -> {
-                            _uiState.value = ConversationUiState.Error(chunk.message ?: "Stream error")
-                        }
+                    } catch (e: Exception) {
+                        Log.e("Lingo", "Stream parse error: ${e.message} for line: $line")
                     }
-                } catch (e: Exception) {
-                    Log.e("Lingo", "Stream parse error: ${e.message} for line: $line")
                 }
             }
         }
@@ -201,6 +212,16 @@ class ConversationViewModel(private val apiService: AikoApiService) : ViewModel(
         }
     }
 
+    private suspend fun animateKaraoke(text: String) {
+        _karaokeText.value = ""
+        text.forEach { char ->
+            _karaokeText.value += char
+            delay(50) // Typewriter speed
+        }
+        delay(300)
+        _karaokeText.value = ""
+    }
+
     fun stopAudio() {
         try {
             mediaPlayer?.stop()
@@ -215,16 +236,6 @@ class ConversationViewModel(private val apiService: AikoApiService) : ViewModel(
     override fun onCleared() {
         super.onCleared()
         stopAudio()
-    }
-
-    private suspend fun animateKaraoke(text: String) {
-        _karaokeText.value = ""
-        text.forEach { char ->
-            _karaokeText.value += char
-            delay(50) // Typewriter speed
-        }
-        delay(300) // Brief pause after finishing
-        _karaokeText.value = "" // Clear after done to avoid double bubbles
     }
 }
 
