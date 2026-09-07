@@ -1,5 +1,15 @@
 package com.aiko.lingo.ui.review
 
+/*
+=====================================================================
+BUGFIX PASS (this version):
+  1. startReviewSession() was called from init{} but was private, so
+     if it failed there was no way to retry short of navigating away
+     and back (which recreates the ViewModel). Added a public
+     retryLoadCards() the screen's Error state can call directly.
+=====================================================================
+*/
+
 import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
@@ -41,6 +51,12 @@ class ReviewViewModel(private val apiService: AikoApiService) : ViewModel() {
                 _uiState.value = ReviewUiState.Error(e.message ?: "Failed to start review")
             }
         }
+    }
+
+    // FIX: public retry hook so the screen can recover from a failed
+    // initial load without recreating the whole ViewModel.
+    fun retryLoadCards() {
+        startReviewSession()
     }
 
     fun submitReview(cardId: Int, response: String, grade: Int) {
