@@ -5,6 +5,18 @@ import retrofit2.http.*
 import kotlinx.serialization.Serializable
 import okhttp3.ResponseBody
 
+/*
+=====================================================================
+BUGFIX PASS (this version):
+  1. Removed respondToConversation() (POST api/english/conversation/respond).
+     Per audit: the backend only ever implemented the streaming variant
+     (respond_stream), so this was a dead interface method pointing at a
+     404. The frontend never called it -- ConversationViewModel always
+     uses respondToConversationStream(). If a non-streaming path is ever
+     actually needed, re-add this once the backend implements it.
+=====================================================================
+*/
+
 interface AikoApiService {
     // ========== Translation ==========
     @POST("api/english/translate")
@@ -14,9 +26,6 @@ interface AikoApiService {
     @Streaming
     @POST("api/english/conversation/start")
     suspend fun startConversationStream(@Body request: ConversationStartRequest): ResponseBody
-
-    @POST("api/english/conversation/respond")
-    suspend fun respondToConversation(@Body request: ConversationRespondRequest): ConversationResponse
 
     @Streaming
     @POST("api/english/conversation/respond_stream")
