@@ -42,6 +42,11 @@ interface AikoApiService {
     @POST("api/english/xp/add")
     suspend fun addXp(@Body request: XPAddRequest): XPResponse
 
+    // NEW: dedicated weak-vocab endpoint (also embedded in StatsResponse.weak_vocab,
+    // but exposed standalone so screens that don't need full stats can fetch just this).
+    @GET("api/english/weak-vocab")
+    suspend fun getWeakVocab(): List<ReviewCard>
+
     // ========== Leaderboard ==========
     @GET("api/english/leaderboard")
     suspend fun getLeaderboard(): LeaderboardResponse
