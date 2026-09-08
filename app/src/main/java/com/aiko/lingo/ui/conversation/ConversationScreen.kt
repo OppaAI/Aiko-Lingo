@@ -198,7 +198,7 @@ fun LevelButton(title: String, desc: String, color: Color, onClick: () -> Unit) 
 @Composable
 fun ChatBubble(entry: DialogueEntry) {
     val isAiko = !entry.isUser
-    val bubbleColor = if (isAiko) Color.White else PastelBlue.copy(alpha = 0.4f)
+    val bubbleColor = if (isAiko) ShoujoSoftPink else ShoujoPink
     val alignment = if (isAiko) Alignment.Start else Alignment.End
     
     Column(
@@ -214,7 +214,7 @@ fun ChatBubble(entry: DialogueEntry) {
                 bottomEnd = if (isAiko) 32.dp else 8.dp
             ),
             modifier = Modifier.widthIn(max = 320.dp).shadow(2.dp, RoundedCornerShape(32.dp)),
-            border = if (isAiko) BorderStroke(1.dp, Color(0xFFF5F5F5)) else null
+            border = if (isAiko) BorderStroke(1.dp, ShoujoPink) else null
         ) {
             Column(modifier = Modifier.padding(20.dp)) {
                 Text(
@@ -251,11 +251,21 @@ fun MessageInput(viewModel: ConversationViewModel, isEnabled: Boolean) {
             modifier = Modifier.padding(20.dp).safeDrawingPadding(),
             verticalAlignment = Alignment.CenterVertically
         ) {
+            IconButton(
+                onClick = { viewModel.getHint() },
+                enabled = isEnabled,
+                modifier = Modifier.size(52.dp).background(PastelYellow, RoundedCornerShape(16.dp))
+            ) {
+                Icon(Icons.Default.Lightbulb, contentDescription = "Hint", tint = PastelYellowDark)
+            }
+
+            Spacer(modifier = Modifier.width(8.dp))
+
             TextField(
                 value = text,
                 onValueChange = { text = it },
                 modifier = Modifier.weight(1f).shadow(1.dp, RoundedCornerShape(24.dp)),
-                placeholder = { Text("Reply in English...", color = Color.LightGray) },
+                placeholder = { Text("Reply in Japanese...", color = Color.LightGray) },
                 enabled = isEnabled,
                 colors = TextFieldDefaults.colors(
                     focusedContainerColor = Color(0xFFF5F5F5),
@@ -282,16 +292,7 @@ fun MessageInput(viewModel: ConversationViewModel, isEnabled: Boolean) {
             ) {
                 Icon(Icons.AutoMirrored.Filled.Send, contentDescription = "Send", tint = Color.White)
             }
-            
-            Spacer(modifier = Modifier.width(8.dp))
-            
-            IconButton(
-                onClick = { viewModel.getHint() },
-                enabled = isEnabled,
-                modifier = Modifier.size(52.dp).background(PastelYellow, RoundedCornerShape(16.dp))
-            ) {
-                Icon(Icons.Default.Lightbulb, contentDescription = "Hint", tint = PastelYellowDark)
-            }
+
         }
     }
 }

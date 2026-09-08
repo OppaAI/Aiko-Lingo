@@ -38,6 +38,8 @@ import com.aiko.lingo.ui.review.ReviewViewModel
 import com.aiko.lingo.ui.review.ReviewMode
 import com.aiko.lingo.ui.leaderboard.LeaderboardScreen
 import com.aiko.lingo.ui.leaderboard.LeaderboardViewModel
+import com.aiko.lingo.ui.learn.LearnScreen
+import com.aiko.lingo.ui.learn.LearnViewModel
 import com.aiko.lingo.ui.theme.*
 import retrofit2.converter.kotlinx.serialization.asConverterFactory
 import kotlinx.serialization.json.Json
@@ -93,7 +95,7 @@ private fun AikoLingoApp(apiService: AikoApiService, onToggleTheme: () -> Unit) 
                 onNavigateToTranslate = { navController.navigate("translate") },
                 onNavigateToConversation = { navController.navigate("conversation") },
                 onNavigateToReview = { navController.navigate("review/SRS") },
-                onNavigateToLearn = { navController.navigate("review/LEARN") },
+                onNavigateToLearn = { navController.navigate("learn") },
                 onNavigateToDashboard = { navController.navigate("dashboard") },
                 onNavigateToLeaderboard = { navController.navigate("leaderboard") },
                 onToggleTheme = onToggleTheme
@@ -134,6 +136,10 @@ private fun AikoLingoApp(apiService: AikoApiService, onToggleTheme: () -> Unit) 
             }
             
             ReviewScreen(vm, onBack = { navController.popBackStack() })
+        }
+        composable("learn") {
+            val vm: LearnViewModel = viewModel(factory = factory)
+            LearnScreen(vm, onBack = { navController.popBackStack() })
         }
         composable("leaderboard") {
             val vm: LeaderboardViewModel = viewModel(factory = factory)

@@ -8,6 +8,7 @@ import com.aiko.lingo.ui.translate.TranslateViewModel
 import com.aiko.lingo.ui.dashboard.DashboardViewModel
 import com.aiko.lingo.ui.review.ReviewViewModel
 import com.aiko.lingo.ui.leaderboard.LeaderboardViewModel
+import com.aiko.lingo.ui.learn.LearnViewModel
 
 class ViewModelFactory(private val apiService: AikoApiService) : ViewModelProvider.Factory {
     @Suppress("UNCHECKED_CAST")
@@ -27,6 +28,9 @@ class ViewModelFactory(private val apiService: AikoApiService) : ViewModelProvid
             }
             modelClass.isAssignableFrom(LeaderboardViewModel::class.java) -> {
                 LeaderboardViewModel(apiService) as T
+            }
+            modelClass.isAssignableFrom(LearnViewModel::class.java) -> {
+                LearnViewModel(apiService) as T
             }
             else -> throw IllegalArgumentException("Unknown ViewModel class")
         }

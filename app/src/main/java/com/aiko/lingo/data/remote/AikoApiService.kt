@@ -65,6 +65,13 @@ interface AikoApiService {
     @GET("api/english/weak-vocab")
     suspend fun getWeakVocab(): List<ReviewCard>
 
+    // ========== Learn (lesson decks) ==========
+    @GET("api/english/lessons")
+    suspend fun getLessons(): List<LessonDeckMeta>
+
+    @GET("api/english/lessons/{deckId}")
+    suspend fun getLesson(@Path("deckId") deckId: String): LessonDeck
+
     // ========== Word of the Day ==========
     @GET("api/english/word-of-day")
     suspend fun getWordOfDay(): WordOfDayResponse

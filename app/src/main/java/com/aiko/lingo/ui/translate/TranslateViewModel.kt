@@ -41,7 +41,9 @@ class TranslateViewModel(private val apiService: AikoApiService) : ViewModel() {
     }
 
     private var mediaPlayer: MediaPlayer? = null
-    private val isAudioLoading = MutableStateFlow(false)
+    // Card key currently loading/playing (null when idle), so only the
+    // tapped card's play button spins instead of every card's.
+    private val isAudioLoading = MutableStateFlow<String?>(null)
     val audioLoading = isAudioLoading.asStateFlow()
 
     private val _audioError = MutableStateFlow<String?>(null)
@@ -62,15 +64,15 @@ class TranslateViewModel(private val apiService: AikoApiService) : ViewModel() {
         }
     }
 
-    fun playAudio(text: String, existingUrl: String? = null) {
+    fun playAudio(text: String, existingUrl: String? = null, key: String = text) {
         if (text.isBlank() && existingUrl.isNullOrBlank()) return
 
         stopAudio()
-        
+
         viewModelScope.launch {
             var currentPlayer: MediaPlayer? = null
             try {
-                isAudioLoading.value = true
+                isAudioLoading.value = key
                 val url = existingUrl ?: apiService.getTts(text).audioUrl
                 
                 currentPlayer = MediaPlayer().apply {
@@ -84,11 +86,11 @@ class TranslateViewModel(private val apiService: AikoApiService) : ViewModel() {
                     prepareAsync()
                     setOnPreparedListener { 
                         try {
-                            isAudioLoading.value = false
+                            isAudioLoading.value = null
                             start()
                         } catch (e: Exception) {
                             Log.e("Lingo", "Failed to start audio playback", e)
-                            isAudioLoading.value = false
+                            isAudioLoading.value = null
                         }
                     }
                     setOnCompletionListener { 
@@ -101,7 +103,7 @@ class TranslateViewModel(private val apiService: AikoApiService) : ViewModel() {
                     }
                     setOnErrorListener { mp, what, extra ->
                         Log.e("Lingo", "MediaPlayer error: what=$what, extra=$extra")
-                        isAudioLoading.value = false
+                        isAudioLoading.value = null
                         _audioError.value = "Audio playback failed."
                         try {
                             mp?.release()
@@ -115,7 +117,7 @@ class TranslateViewModel(private val apiService: AikoApiService) : ViewModel() {
                 mediaPlayer = currentPlayer
             } catch (e: Exception) {
                 Log.e("Lingo", "Audio playback error", e)
-                isAudioLoading.value = false
+                isAudioLoading.value = null
                 _audioError.value = if (e is HttpException && e.code() == 429) {
                     "Audio rate limit reached. Please wait a moment."
                 } else {

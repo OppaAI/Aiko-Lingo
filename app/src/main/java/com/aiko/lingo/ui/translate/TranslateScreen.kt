@@ -139,7 +139,10 @@ fun TranslateScreen(
                                     TranslationCard(
                                         translation = translation,
                                         viewModel = viewModel,
-                                        onPlayAudio = { viewModel.playAudio(translation.text, translation.audioUrl) }
+                                        onPlayAudio = { viewModel.playAudio(
+                                            translation.text, translation.audioUrl,
+                                            "${translation.text}-${translation.register}"
+                                        ) }
                                     )
                                 }
                             }
@@ -205,7 +208,9 @@ fun TranslationCard(
     viewModel: TranslateViewModel,
     onPlayAudio: () -> Unit
 ) {
-    val isAudioLoading by viewModel.audioLoading.collectAsState()
+    val audioLoadingKey by viewModel.audioLoading.collectAsState()
+    val cardKey = "${translation.text}-${translation.register}"
+    val isAudioLoading = audioLoadingKey == cardKey
 
     Card(
         modifier = Modifier

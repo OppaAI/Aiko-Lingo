@@ -137,6 +137,31 @@ data class WordOfDayResponse(
 )
 
 @Serializable
+data class LessonDeckMeta(
+    val id: String,
+    val title: String,
+    val subtitle: String = "",
+    val kind: String = "",
+    val card_count: Int = 0
+)
+
+@Serializable
+data class LessonCard(
+    val front: String,
+    val back: String,
+    val reading: String = ""
+)
+
+@Serializable
+data class LessonDeck(
+    val id: String,
+    val title: String,
+    val subtitle: String = "",
+    val kind: String = "",
+    val cards: List<LessonCard> = emptyList()
+)
+
+@Serializable
 data class Streak(
     val days: Int,
     val total_sessions: Int,

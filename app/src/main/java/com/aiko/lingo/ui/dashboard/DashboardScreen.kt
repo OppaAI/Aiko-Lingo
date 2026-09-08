@@ -152,26 +152,6 @@ private fun DashboardContent(
             WeakVocabCard(stats.weak_vocab, onNavigateToReview)
         }
 
-        Spacer(modifier = Modifier.height(32.dp))
-
-        if (stats.cards_due > 0) {
-            Button(
-                onClick = { onNavigateToReview("SRS") },
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(64.dp)
-                    .shadow(8.dp, RoundedCornerShape(32.dp)),
-                shape = RoundedCornerShape(32.dp),
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = PastelGreenDark,
-                    contentColor = Color.White
-                )
-            ) {
-                Icon(Icons.Default.Refresh, contentDescription = "Review")
-                Spacer(modifier = Modifier.width(12.dp))
-                Text("Start Practice (${stats.cards_due})", fontSize = 18.sp, fontWeight = FontWeight.ExtraBold)
-            }
-        }
     }
 }
 

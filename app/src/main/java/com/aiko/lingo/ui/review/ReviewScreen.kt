@@ -369,9 +369,9 @@ private fun ReviewFinishedScreen(
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center
     ) {
-        Text("🥳", fontSize = 120.sp)
+        Text("🥳", fontSize = 72.sp)
 
-        Spacer(modifier = Modifier.height(32.dp))
+        Spacer(modifier = Modifier.height(12.dp))
 
         Text(
             if (reviewsCompleted > 0) "Goal Reached!" else "All Caught Up!",
@@ -380,14 +380,14 @@ private fun ReviewFinishedScreen(
             color = PastelGreenDark
         )
 
-        Spacer(modifier = Modifier.height(16.dp))
+        Spacer(modifier = Modifier.height(12.dp))
 
         Surface(
             color = PastelGreen.copy(alpha = 0.3f),
             shape = RoundedCornerShape(32.dp)
         ) {
             Column(
-                modifier = Modifier.padding(32.dp),
+                modifier = Modifier.padding(horizontal = 24.dp, vertical = 16.dp),
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
                 if (reviewsCompleted > 0) {
@@ -426,18 +426,18 @@ private fun ReviewFinishedScreen(
             }
         }
 
-        Spacer(modifier = Modifier.height(64.dp))
+        Spacer(modifier = Modifier.height(20.dp))
 
         Button(
             onClick = onBack,
             modifier = Modifier
                 .fillMaxWidth(0.85f)
-                .height(70.dp)
-                .shadow(8.dp, RoundedCornerShape(35.dp)),
-            shape = RoundedCornerShape(35.dp),
+                .height(56.dp)
+                .shadow(8.dp, RoundedCornerShape(28.dp)),
+            shape = RoundedCornerShape(28.dp),
             colors = ButtonDefaults.buttonColors(containerColor = PastelGreenDark)
         ) {
-            Text("CONTINUE", fontWeight = FontWeight.ExtraBold, fontSize = 22.sp)
+            Text("CONTINUE", fontWeight = FontWeight.ExtraBold, fontSize = 18.sp)
         }
     }
 }
