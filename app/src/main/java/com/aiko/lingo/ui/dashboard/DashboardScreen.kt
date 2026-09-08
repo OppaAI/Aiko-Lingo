@@ -2,11 +2,15 @@ package com.aiko.lingo.ui.dashboard
 
 /*
 =====================================================================
-CUTE UI OVERHAUL (this version):
-  1. Circular XP Progress with pastel gradients.
-  2. Large, rounded cards (32dp) with soft shadows.
-  3. Word of the Day highlights with a "premium" feel.
-  4. Pastel grid for stats and progress tracking.
+CRASH FIX (this version):
+  1. Moved the `when(uiState)` block so that the scrollable Column is
+     ONLY used in the Success state.
+  2. Fixed a classic Compose crash where `Box(Modifier.fillMaxSize())`
+     (the Loading indicator) was measured inside a scrollable Column,
+     leading to infinite height constraints and an IllegalStateException.
+
+CUTE UI OVERHAUL (maintained):
+  - Circular XP Progress, 32dp rounded cards, and pastel palette.
 =====================================================================
 */
 
@@ -66,13 +70,9 @@ fun DashboardScreen(
             )
         }
     ) { padding ->
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(padding)
-                .padding(horizontal = 16.dp)
-                .verticalScroll(rememberScrollState())
-        ) {
+        // ✅ FIX: Move the scrollable Column inside the Success state
+        // or ensure it doesn't wrap the Loading/Error states which use fillMaxSize.
+        Box(modifier = Modifier.fillMaxSize().padding(padding)) {
             when (val state = uiState) {
                 DashboardUiState.Loading -> {
                     Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
@@ -80,12 +80,20 @@ fun DashboardScreen(
                     }
                 }
                 is DashboardUiState.Success -> {
-                    DashboardContent(
-                        stats = state.stats,
-                        wordOfDay = state.wordOfDay,
-                        onNavigateToReview = onNavigateToReview,
-                        onPlayWord = { text, url -> viewModel.playWord(text, url) }
-                    )
+                    Column(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .padding(horizontal = 16.dp)
+                            .verticalScroll(rememberScrollState())
+                    ) {
+                        DashboardContent(
+                            stats = state.stats,
+                            wordOfDay = state.wordOfDay,
+                            onNavigateToReview = onNavigateToReview,
+                            onPlayWord = { text, url -> viewModel.playWord(text, url) }
+                        )
+                        Spacer(modifier = Modifier.height(48.dp))
+                    }
                 }
                 is DashboardUiState.Error -> {
                     Column(
@@ -105,7 +113,6 @@ fun DashboardScreen(
                     }
                 }
             }
-            Spacer(modifier = Modifier.height(48.dp))
         }
     }
 }

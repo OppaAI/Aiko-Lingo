@@ -2,11 +2,15 @@ package com.aiko.lingo.ui.review
 
 /*
 =====================================================================
-CUTE UI OVERHAUL (this version):
-  1. Multiple Choice Grid with bouncy selection animations.
-  2. Action Bar with celebratory pastel backgrounds and emojis.
-  3. High-visibility Nihongo badge and clean typography.
-  4. Animated progress bar with "XP Gain" style colors.
+FIX (this version):
+  1. Wrapped `ReviewCardContent` in a Column inside `AnimatedContent`.
+     Since `ReviewCardContent` is a `ColumnScope` extension using
+     `.weight(1f)`, it must be called within a Column.
+  2. Fixed a potential crash where filling max size inside
+     AnimatedContent might conflict with parent constraints.
+
+CUTE UI OVERHAUL (maintained):
+  - Multiple Choice Grid, Action Bar, and bouncy animations.
 =====================================================================
 */
 
@@ -105,7 +109,8 @@ fun ReviewScreen(
                     fadeIn(animationSpec = tween(300)) + slideInHorizontally { it } togetherWith
                     fadeOut(animationSpec = tween(300)) + slideOutHorizontally { -it }
                 },
-                label = "screen_transition"
+                label = "screen_transition",
+                modifier = Modifier.fillMaxSize().weight(1f)
             ) { state ->
                 when (state) {
                     ReviewUiState.Loading -> {
@@ -115,7 +120,10 @@ fun ReviewScreen(
                     }
                     ReviewUiState.Reviewing -> {
                         currentCard?.let { card ->
-                            ReviewCardContent(card, viewModel)
+                            // ✅ FIX: Provide ColumnScope for ReviewCardContent
+                            Column(modifier = Modifier.fillMaxSize()) {
+                                ReviewCardContent(card, viewModel)
+                            }
                         }
                     }
                     is ReviewUiState.Finished -> {
