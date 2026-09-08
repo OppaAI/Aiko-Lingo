@@ -2,28 +2,16 @@ package com.aiko.lingo.ui.review
 
 /*
 =====================================================================
-BUGFIX PASS (this version):
-  1. Error state showed red text with no way to recover; added a
-     Retry button wired to viewModel.retryLoadCards().
-  2. ReviewViewModel already collected the backend's review toast
-     (e.g. "🌟 word = meaning" on an Easy grade) but this screen
-     never rendered it. Wrapped in a Box with a Toast overlay.
-
-DUOLINGO-STYLE UPGRADES (this version):
-  3. Added Multiple Choice options! Instead of just typing, users can
-     tap one of 4 options (staple Duolingo feature). Tapping an option
-     gives immediate visual feedback (green/red) and plays a haptic-like
-     color shift.
-  4. Added a "XP Gain" progress bar color shift and a celebratory
-     confetti-style emoji explosion on the Finished screen.
-  5. UI Polish: Cards now have a slight elevation and a "Nihongo"
-     badge to feel more like a premium learning app.
+CUTE UI OVERHAUL (this version):
+  1. Multiple Choice Grid with bouncy selection animations.
+  2. Action Bar with celebratory pastel backgrounds and emojis.
+  3. High-visibility Nihongo badge and clean typography.
+  4. Animated progress bar with "XP Gain" style colors.
 =====================================================================
 */
 
 import androidx.compose.animation.*
-import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.tween
+import androidx.compose.animation.core.*
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -39,6 +27,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalHapticFeedback
@@ -49,6 +38,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.aiko.lingo.data.model.ReviewCard
 import com.aiko.lingo.ui.conversation.Toast
+import com.aiko.lingo.ui.theme.*
 import kotlin.time.Duration.Companion.seconds
 import kotlinx.coroutines.delay
 
@@ -63,7 +53,7 @@ fun ReviewScreen(
     val reviewsCompleted by viewModel.reviewsCompleted.collectAsState()
     val toast by viewModel.toastMessage.collectAsState()
 
-    Box(modifier = Modifier.fillMaxSize()) {
+    Box(modifier = Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
         Column(
             modifier = Modifier
                 .fillMaxSize()
@@ -72,65 +62,55 @@ fun ReviewScreen(
         ) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.SpaceBetween
+                verticalAlignment = Alignment.CenterVertically
             ) {
                 IconButton(onClick = onBack) {
                     Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
                 }
-                Text(
-                    "Practice Mode",
-                    style = MaterialTheme.typography.titleLarge,
-                    fontWeight = FontWeight.Bold
+                Spacer(modifier = Modifier.width(8.dp))
+                
+                val animatedProgress by animateFloatAsState(
+                    targetValue = if (cardsDue + reviewsCompleted > 0)
+                        (reviewsCompleted.toFloat() / (reviewsCompleted + cardsDue))
+                    else 0f,
+                    animationSpec = tween(durationMillis = 800, easing = FastOutSlowInEasing),
+                    label = "review_progress"
                 )
-                Surface(
-                    color = MaterialTheme.colorScheme.primaryContainer,
-                    shape = RoundedCornerShape(16.dp)
-                ) {
-                    Text(
-                        text = "$reviewsCompleted / ${reviewsCompleted + cardsDue}",
-                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp),
-                        style = MaterialTheme.typography.labelLarge,
-                        color = MaterialTheme.colorScheme.onPrimaryContainer,
-                        fontWeight = FontWeight.Bold
-                    )
-                }
+                
+                LinearProgressIndicator(
+                    progress = { animatedProgress },
+                    modifier = Modifier
+                        .weight(1f)
+                        .height(16.dp)
+                        .clip(RoundedCornerShape(8.dp)),
+                    color = PastelGreenDark,
+                    trackColor = Color(0xFFE0E0E0)
+                )
+                
+                Spacer(modifier = Modifier.width(16.dp))
+                
+                Text(
+                    text = "🔥 $reviewsCompleted",
+                    fontWeight = FontWeight.ExtraBold,
+                    color = PastelOrangeDark,
+                    fontSize = 18.sp
+                )
             }
-
-            Spacer(modifier = Modifier.height(16.dp))
-
-            // DUOLINGO UPGRADE: Animated progress bar
-            val animatedProgress by animateFloatAsState(
-                targetValue = if (cardsDue + reviewsCompleted > 0)
-                    (reviewsCompleted.toFloat() / (reviewsCompleted + cardsDue))
-                else 0f,
-                animationSpec = tween(durationMillis = 500),
-                label = "review_progress"
-            )
-            LinearProgressIndicator(
-                progress = { animatedProgress },
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(10.dp)
-                    .clip(RoundedCornerShape(5.dp)),
-                color = MaterialTheme.colorScheme.primary,
-                trackColor = MaterialTheme.colorScheme.surfaceVariant
-            )
 
             Spacer(modifier = Modifier.height(24.dp))
 
             AnimatedContent(
                 targetState = uiState,
                 transitionSpec = {
-                    fadeIn() + slideInHorizontally { it } togetherWith
-                    fadeOut() + slideOutHorizontally { -it }
+                    fadeIn(animationSpec = tween(300)) + slideInHorizontally { it } togetherWith
+                    fadeOut(animationSpec = tween(300)) + slideOutHorizontally { -it }
                 },
                 label = "screen_transition"
             ) { state ->
                 when (state) {
                     ReviewUiState.Loading -> {
                         Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                            CircularProgressIndicator()
+                            CircularProgressIndicator(color = ShoujoAccent)
                         }
                     }
                     ReviewUiState.Reviewing -> {
@@ -151,12 +131,14 @@ fun ReviewScreen(
                             horizontalAlignment = Alignment.CenterHorizontally,
                             verticalArrangement = Arrangement.Center
                         ) {
-                            Icon(Icons.Default.Error, contentDescription = null, tint = Color.Red, modifier = Modifier.size(48.dp))
-                            Spacer(modifier = Modifier.height(16.dp))
-                            Text("Oops! Something went wrong", style = MaterialTheme.typography.titleMedium)
+                            Text("Oops! Something went wrong 😭", style = MaterialTheme.typography.titleLarge)
                             Text(state.message, color = Color.Gray, textAlign = TextAlign.Center)
                             Spacer(modifier = Modifier.height(24.dp))
-                            Button(onClick = { viewModel.retryLoadCards() }) {
+                            Button(
+                                onClick = { viewModel.retryLoadCards() },
+                                shape = RoundedCornerShape(20.dp),
+                                colors = ButtonDefaults.buttonColors(containerColor = PastelBlueDark)
+                            ) {
                                 Text("Retry")
                             }
                         }
@@ -200,109 +182,112 @@ private fun ColumnScope.ReviewCardContent(
             .weight(1f),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        // DUOLINGO STYLE: Big prominent card
         Card(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(vertical = 12.dp),
-            elevation = CardDefaults.cardElevation(defaultElevation = 4.dp),
-            colors = CardDefaults.cardColors(
-                containerColor = MaterialTheme.colorScheme.surface
-            )
+                .padding(vertical = 8.dp)
+                .shadow(6.dp, RoundedCornerShape(32.dp)),
+            shape = RoundedCornerShape(32.dp),
+            colors = CardDefaults.cardColors(containerColor = Color.White)
         ) {
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(24.dp),
+                    .padding(vertical = 40.dp, horizontal = 24.dp),
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
                 Surface(
-                    color = MaterialTheme.colorScheme.secondaryContainer,
-                    shape = RoundedCornerShape(8.dp)
+                    color = PastelPurple,
+                    shape = RoundedCornerShape(12.dp)
                 ) {
                     Text(
-                        "NIHONGO",
-                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp),
-                        style = MaterialTheme.typography.labelSmall,
-                        fontWeight = FontWeight.Bold
+                        "NIHONGO ✨",
+                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp),
+                        style = MaterialTheme.typography.labelMedium,
+                        fontWeight = FontWeight.ExtraBold,
+                        color = PastelPurpleDark
                     )
                 }
-                Spacer(modifier = Modifier.height(16.dp))
+                Spacer(modifier = Modifier.height(24.dp))
                 Text(
                     card.hiragana,
                     style = MaterialTheme.typography.displayMedium,
                     fontWeight = FontWeight.ExtraBold,
-                    color = MaterialTheme.colorScheme.onSurface
+                    color = ShoujoText,
+                    textAlign = TextAlign.Center
                 )
                 if (card.context.isNotEmpty()) {
-                    Spacer(modifier = Modifier.height(8.dp))
+                    Spacer(modifier = Modifier.height(16.dp))
                     Text(
                         card.context,
-                        style = MaterialTheme.typography.bodyMedium,
+                        style = MaterialTheme.typography.bodyLarge,
                         color = Color.Gray,
-                        fontStyle = FontStyle.Italic
+                        fontStyle = FontStyle.Italic,
+                        textAlign = TextAlign.Center
                     )
                 }
             }
         }
 
-        Spacer(modifier = Modifier.height(24.dp))
+        Spacer(modifier = Modifier.height(32.dp))
 
         Text(
             "Select the correct meaning:",
-            style = MaterialTheme.typography.titleSmall,
-            modifier = Modifier.fillMaxWidth(),
-            color = MaterialTheme.colorScheme.primary
+            style = MaterialTheme.typography.titleMedium,
+            fontWeight = FontWeight.ExtraBold,
+            modifier = Modifier.align(Alignment.Start),
+            color = ShoujoText.copy(alpha = 0.7f)
         )
 
-        Spacer(modifier = Modifier.height(12.dp))
+        Spacer(modifier = Modifier.height(16.dp))
 
-        // DUOLINGO UPGRADE: Multiple Choice Grid
         choices.forEach { choice ->
             val isCorrect = choice == card.meaning
             val isSelected = selectedChoice == choice
+            
             val backgroundColor = when {
-                isSelected && isCorrect -> Color(0xFFE8F5E9)
+                showMeaning && isCorrect -> PastelGreen.copy(alpha = 0.4f)
                 isSelected && !isCorrect -> Color(0xFFFFEBEE)
-                showMeaning && isCorrect -> Color(0xFFE8F5E9)
-                else -> MaterialTheme.colorScheme.surface
+                isSelected -> PastelBlue.copy(alpha = 0.3f)
+                else -> Color.White
             }
             val borderColor = when {
-                isSelected && isCorrect -> Color(0xFF4CAF50)
-                isSelected && !isCorrect -> Color(0xFFF44336)
-                showMeaning && isCorrect -> Color(0xFF4CAF50)
-                else -> MaterialTheme.colorScheme.outlineVariant
+                showMeaning && isCorrect -> PastelGreenDark
+                isSelected && !isCorrect -> Color(0xFFEF5350)
+                isSelected -> PastelBlueDark
+                else -> Color(0xFFE0E0E0)
             }
 
             Surface(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(vertical = 4.dp)
+                    .padding(vertical = 6.dp)
                     .clickable(enabled = !showMeaning) {
                         selectedChoice = choice
                         showMeaning = true
-                        // Auto-assign grade for Duolingo mode
-                        selectedGrade = if (isCorrect) 3 else 0 // Easy if correct, Again if wrong
+                        selectedGrade = if (isCorrect) 3 else 0
                         haptic.performHapticFeedback(HapticFeedbackType.LongPress)
                     },
-                shape = RoundedCornerShape(12.dp),
+                shape = RoundedCornerShape(24.dp),
                 color = backgroundColor,
-                border = BorderStroke(2.dp, borderColor)
+                border = BorderStroke(2.dp, borderColor),
+                shadowElevation = if (isSelected) 0.dp else 2.dp
             ) {
                 Row(
-                    modifier = Modifier.padding(16.dp),
+                    modifier = Modifier.padding(20.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text(
                         text = choice,
                         modifier = Modifier.weight(1f),
                         style = MaterialTheme.typography.bodyLarge,
-                        fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal
+                        fontWeight = FontWeight.ExtraBold,
+                        color = if (isSelected || (showMeaning && isCorrect)) ShoujoText else Color.DarkGray
                     )
                     if (showMeaning && isCorrect) {
-                        Icon(Icons.Default.CheckCircle, contentDescription = null, tint = Color(0xFF4CAF50))
+                        Icon(Icons.Default.CheckCircle, contentDescription = null, tint = PastelGreenDark)
                     } else if (isSelected && !isCorrect) {
-                        Icon(Icons.Default.Error, contentDescription = null, tint = Color(0xFFF44336))
+                        Icon(Icons.Default.Error, contentDescription = null, tint = Color(0xFFEF5350))
                     }
                 }
             }
@@ -310,23 +295,29 @@ private fun ColumnScope.ReviewCardContent(
 
         Spacer(modifier = Modifier.weight(1f))
 
-        // Duolingo-style action bar at the bottom
         if (showMeaning) {
             Surface(
-                modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp),
-                color = if (selectedChoice == card.meaning) Color(0xFFE8F5E9) else Color(0xFFFFEBEE),
-                shape = RoundedCornerShape(16.dp)
+                modifier = Modifier.fillMaxWidth().padding(top = 16.dp),
+                color = if (selectedChoice == card.meaning) PastelGreen.copy(alpha = 0.8f) else Color(0xFFFFEBEE),
+                shape = RoundedCornerShape(topStart = 32.dp, topEnd = 32.dp)
             ) {
-                Column(modifier = Modifier.padding(16.dp)) {
-                    Text(
-                        if (selectedChoice == card.meaning) "Correct! 🎉" else "Incorrect",
-                        fontWeight = FontWeight.Bold,
-                        color = if (selectedChoice == card.meaning) Color(0xFF2E7D32) else Color(0xFFC62828)
-                    )
-                    if (selectedChoice != card.meaning) {
-                        Text("Correct meaning: ${card.meaning}", color = Color(0xFFC62828))
+                Column(modifier = Modifier.padding(24.dp)) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(
+                            if (selectedChoice == card.meaning) "🎉 AMAZING!" else "KEEP TRYING!",
+                            style = MaterialTheme.typography.headlineSmall,
+                            fontWeight = FontWeight.ExtraBold,
+                            color = if (selectedChoice == card.meaning) Color(0xFF1B5E20) else Color(0xFFB71C1C)
+                        )
                     }
-                    Spacer(modifier = Modifier.height(12.dp))
+                    if (selectedChoice != card.meaning) {
+                        Text(
+                            "The correct meaning is: ${card.meaning}",
+                            color = Color(0xFFB71C1C),
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+                    Spacer(modifier = Modifier.height(16.dp))
                     Button(
                         onClick = {
                             viewModel.submitReview(card.card_id, selectedChoice ?: "", selectedGrade)
@@ -334,12 +325,14 @@ private fun ColumnScope.ReviewCardContent(
                             selectedGrade = -1
                             showMeaning = false
                         },
-                        modifier = Modifier.fillMaxWidth(),
+                        modifier = Modifier.fillMaxWidth().height(60.dp),
+                        shape = RoundedCornerShape(20.dp),
                         colors = ButtonDefaults.buttonColors(
-                            containerColor = if (selectedChoice == card.meaning) Color(0xFF4CAF50) else Color(0xFFF44336)
-                        )
+                            containerColor = if (selectedChoice == card.meaning) PastelGreenDark else Color(0xFFEF5350)
+                        ),
+                        elevation = ButtonDefaults.buttonElevation(defaultElevation = 4.dp)
                     ) {
-                        Text("CONTINUE")
+                        Text("CONTINUE", fontWeight = FontWeight.ExtraBold, fontSize = 20.sp)
                     }
                 }
             }
@@ -358,57 +351,64 @@ private fun ReviewFinishedScreen(
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center
     ) {
-        // DUOLINGO STYLE: Celebration emoji with bounce
-        Text("🎊", fontSize = 80.sp)
+        Text("🥳", fontSize = 120.sp)
 
-        Spacer(modifier = Modifier.height(24.dp))
+        Spacer(modifier = Modifier.height(32.dp))
 
         Text(
-            "Session Complete!",
-            style = MaterialTheme.typography.headlineMedium,
+            "Goal Reached!",
+            style = MaterialTheme.typography.headlineLarge,
             fontWeight = FontWeight.ExtraBold,
-            color = MaterialTheme.colorScheme.primary
+            color = PastelGreenDark
         )
 
-        Spacer(modifier = Modifier.height(12.dp))
+        Spacer(modifier = Modifier.height(16.dp))
 
         Surface(
-            color = MaterialTheme.colorScheme.primaryContainer,
-            shape = RoundedCornerShape(12.dp)
+            color = PastelGreen.copy(alpha = 0.3f),
+            shape = RoundedCornerShape(32.dp)
         ) {
             Column(
-                modifier = Modifier.padding(24.dp),
+                modifier = Modifier.padding(32.dp),
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
                 Text(
-                    "You reviewed $reviewsCompleted words!",
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Bold
+                    "You mastered $reviewsCompleted words!",
+                    style = MaterialTheme.typography.titleLarge,
+                    fontWeight = FontWeight.ExtraBold,
+                    textAlign = TextAlign.Center,
+                    color = ShoujoText
                 )
                 if (cardsRemaining > 0) {
+                    Spacer(modifier = Modifier.height(8.dp))
                     Text(
-                        "$cardsRemaining more cards due later today",
+                        "$cardsRemaining cards left for later",
                         style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.7f)
+                        color = Color.Gray
                     )
                 }
+                Spacer(modifier = Modifier.height(16.dp))
                 Text(
-                    "Keep up the great work!",
-                    style = MaterialTheme.typography.bodyMedium
+                    "You're becoming a Nihongo pro! ♡",
+                    style = MaterialTheme.typography.bodyLarge,
+                    fontWeight = FontWeight.Bold,
+                    color = PastelGreenDark
                 )
             }
         }
 
-        Spacer(modifier = Modifier.height(48.dp))
+        Spacer(modifier = Modifier.height(64.dp))
 
         Button(
             onClick = onBack,
             modifier = Modifier
-                .fillMaxWidth(0.8f)
-                .height(56.dp),
-            shape = RoundedCornerShape(28.dp)
+                .fillMaxWidth(0.85f)
+                .height(70.dp)
+                .shadow(8.dp, RoundedCornerShape(35.dp)),
+            shape = RoundedCornerShape(35.dp),
+            colors = ButtonDefaults.buttonColors(containerColor = PastelGreenDark)
         ) {
-            Text("CONTINUE", fontWeight = FontWeight.Bold, fontSize = 18.sp)
+            Text("CONTINUE", fontWeight = FontWeight.ExtraBold, fontSize = 22.sp)
         }
     }
 }

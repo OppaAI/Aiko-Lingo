@@ -5,13 +5,19 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.activity.enableEdgeToEdge
 import androidx.navigation.NavType
@@ -31,7 +37,7 @@ import com.aiko.lingo.ui.review.ReviewViewModel
 import com.aiko.lingo.ui.review.ReviewMode
 import com.aiko.lingo.ui.leaderboard.LeaderboardScreen
 import com.aiko.lingo.ui.leaderboard.LeaderboardViewModel
-import com.aiko.lingo.ui.theme.AikoLingoTheme
+import com.aiko.lingo.ui.theme.*
 import retrofit2.converter.kotlinx.serialization.asConverterFactory
 import kotlinx.serialization.json.Json
 import okhttp3.MediaType.Companion.toMediaType
@@ -86,6 +92,7 @@ private fun AikoLingoApp(apiService: AikoApiService, onToggleTheme: () -> Unit) 
                 onNavigateToTranslate = { navController.navigate("translate") },
                 onNavigateToConversation = { navController.navigate("conversation") },
                 onNavigateToReview = { navController.navigate("review/SRS") },
+                onNavigateToLearn = { navController.navigate("review/LEARN") },
                 onNavigateToDashboard = { navController.navigate("dashboard") },
                 onNavigateToLeaderboard = { navController.navigate("leaderboard") },
                 onToggleTheme = onToggleTheme
@@ -114,10 +121,13 @@ private fun AikoLingoApp(apiService: AikoApiService, onToggleTheme: () -> Unit) 
             arguments = listOf(navArgument("mode") { type = NavType.StringType })
         ) { backStackEntry ->
             val modeStr = backStackEntry.arguments?.getString("mode") ?: "SRS"
-            val mode = if (modeStr == "PRACTICE") ReviewMode.PRACTICE else ReviewMode.SRS
+            val mode = when(modeStr) {
+                "PRACTICE" -> ReviewMode.PRACTICE
+                "LEARN" -> ReviewMode.LEARN
+                else -> ReviewMode.SRS
+            }
             val vm: ReviewViewModel = viewModel(factory = factory)
             
-            // Re-initialize VM with the correct mode if it's new
             LaunchedEffect(mode) {
                 vm.setMode(mode)
             }
@@ -136,6 +146,7 @@ fun MainMenu(
     onNavigateToTranslate: () -> Unit,
     onNavigateToConversation: () -> Unit,
     onNavigateToReview: () -> Unit,
+    onNavigateToLearn: () -> Unit,
     onNavigateToDashboard: () -> Unit,
     onNavigateToLeaderboard: () -> Unit,
     onToggleTheme: () -> Unit
@@ -145,38 +156,135 @@ fun MainMenu(
             .fillMaxSize()
             .safeDrawingPadding()
             .padding(24.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.Center
+        horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        Image(
-            painter = painterResource(R.drawable.aiko_square),
-            contentDescription = "Aiko",
-            modifier = Modifier.size(230.dp),
-            contentScale = ContentScale.Crop
-        )
-        Text("Aiko Lingo ♡", style = MaterialTheme.typography.headlineLarge)
-        Text("Learn Nihongo with Aiko", modifier = Modifier.padding(top = 8.dp, bottom = 32.dp))
-        
-        Button(onClick = onNavigateToTranslate, modifier = Modifier.fillMaxWidth(0.7f)) {
-            Text("✦  Translate")
-        }
-        Button(onClick = onNavigateToConversation, modifier = Modifier.padding(top = 12.dp).fillMaxWidth(0.7f)) {
-            Text("♡  Conversation")
-        }
-        Button(onClick = onNavigateToReview, modifier = Modifier.padding(top = 12.dp).fillMaxWidth(0.7f)) {
-            Text("📚  Practice")
-        }
-        Button(onClick = onNavigateToDashboard, modifier = Modifier.padding(top = 12.dp).fillMaxWidth(0.7f)) {
-            Text("📊  Dashboard")
-        }
-        Button(onClick = onNavigateToLeaderboard, modifier = Modifier.padding(top = 12.dp).fillMaxWidth(0.7f)) {
-            Text("🏆  Leaderboard")
-        }
-        
         Spacer(modifier = Modifier.height(48.dp))
         
-        TextButton(onClick = onToggleTheme) {
-            Text("Switch Theme ✨")
+        Card(
+            shape = RoundedCornerShape(40.dp),
+            elevation = CardDefaults.cardElevation(defaultElevation = 12.dp),
+            modifier = Modifier.padding(bottom = 24.dp)
+        ) {
+            Image(
+                painter = painterResource(R.drawable.aiko_square),
+                contentDescription = "Aiko",
+                modifier = Modifier.size(160.dp),
+                contentScale = ContentScale.Crop
+            )
+        }
+        
+        Text(
+            "Aiko Lingo ♡",
+            style = MaterialTheme.typography.headlineLarge,
+            fontWeight = FontWeight.ExtraBold,
+            color = MaterialTheme.colorScheme.primary
+        )
+        Text(
+            "Ready for a Nihongo adventure?",
+            modifier = Modifier.padding(top = 4.dp, bottom = 32.dp),
+            style = MaterialTheme.typography.bodyLarge,
+            color = Color.Gray
+        )
+        
+        LazyVerticalGrid(
+            columns = GridCells.Fixed(2),
+            modifier = Modifier.weight(1f),
+            contentPadding = PaddingValues(8.dp),
+            horizontalArrangement = Arrangement.spacedBy(16.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp)
+        ) {
+            item {
+                CuteMenuCard(
+                    text = "Learn",
+                    icon = "✨",
+                    color = PastelGreen,
+                    onClick = onNavigateToLearn
+                )
+            }
+            item {
+                CuteMenuCard(
+                    text = "Review",
+                    icon = "📚",
+                    color = PastelBlue,
+                    onClick = onNavigateToReview
+                )
+            }
+            item {
+                CuteMenuCard(
+                    text = "Chat",
+                    icon = "♡",
+                    color = ShoujoPink,
+                    onClick = onNavigateToConversation
+                )
+            }
+            item {
+                CuteMenuCard(
+                    text = "Translate",
+                    icon = "✦",
+                    color = PastelOrange,
+                    onClick = onNavigateToTranslate
+                )
+            }
+            item {
+                CuteMenuCard(
+                    text = "Stats",
+                    icon = "📊",
+                    color = PastelPurple,
+                    onClick = onNavigateToDashboard
+                )
+            }
+            item {
+                CuteMenuCard(
+                    text = "Ranks",
+                    icon = "🏆",
+                    color = PastelYellow,
+                    onClick = onNavigateToLeaderboard
+                )
+            }
+        }
+        
+        Spacer(modifier = Modifier.height(24.dp))
+        
+        TextButton(
+            onClick = onToggleTheme,
+            modifier = Modifier.padding(bottom = 16.dp)
+        ) {
+            Text("✨ Switch Aesthetic ✨", fontWeight = FontWeight.Bold)
+        }
+    }
+}
+
+@Composable
+fun CuteMenuCard(
+    text: String,
+    icon: String,
+    color: Color,
+    onClick: () -> Unit
+) {
+    Card(
+        onClick = onClick,
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(110.dp),
+        shape = RoundedCornerShape(28.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = color
+        ),
+        elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
+    ) {
+        Column(
+            modifier = Modifier.fillMaxSize(),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center
+        ) {
+            Text(icon, fontSize = 32.sp)
+            Spacer(modifier = Modifier.height(4.dp))
+            Text(
+                text = text,
+                fontSize = 18.sp,
+                fontWeight = FontWeight.ExtraBold,
+                color = ShoujoText
+            )
         }
     }
 }

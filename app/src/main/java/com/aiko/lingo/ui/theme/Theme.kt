@@ -10,14 +10,17 @@ import androidx.compose.ui.graphics.Color
 private val ShoujoColorScheme = lightColorScheme(
     primary = ShoujoAccent,
     secondary = ShoujoPink,
-    tertiary = ShoujoSoftPink,
-    background = Color.White,
-    surface = ShoujoSoftPink,
+    tertiary = PastelBlue,
+    background = Color(0xFFFAFAFA),
+    surface = Color.White,
     onPrimary = Color.White,
     onSecondary = ShoujoText,
     onTertiary = ShoujoText,
     onBackground = ShoujoText,
-    onSurface = ShoujoText
+    onSurface = ShoujoText,
+    error = Color(0xFFEF5350),
+    errorContainer = Color(0xFFFFEBEE),
+    onErrorContainer = Color(0xFFC62828)
 )
 
 private val LavenderGlassColorScheme = darkColorScheme(

@@ -2,17 +2,11 @@ package com.aiko.lingo.ui.dashboard
 
 /*
 =====================================================================
-BUGFIX PASS (this version):
-  1. Error state had no retry affordance -- added a Retry button
-     calling viewModel.refreshStats().
-  2. Added a "Practice These" row driven by the new
-     StatsResponse.weak_vocab field (cards with a high review-failure
-     rate), matching the weak-vocab backend endpoint / SRS addition.
-
-DUOLINGO-STYLE UPGRADES (this version):
-  3. The "Practice These" widget now correctly routes to a specialized
-     Practice mode in the Review screen, allowing for targeted
-     learning of weak spots (a key Duolingo feature).
+CUTE UI OVERHAUL (this version):
+  1. Circular XP Progress with pastel gradients.
+  2. Large, rounded cards (32dp) with soft shadows.
+  3. Word of the Day highlights with a "premium" feel.
+  4. Pastel grid for stats and progress tracking.
 =====================================================================
 */
 
@@ -20,7 +14,9 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.PlayArrow
@@ -30,6 +26,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -38,6 +35,7 @@ import androidx.compose.ui.unit.sp
 import com.aiko.lingo.data.model.ReviewCard
 import com.aiko.lingo.data.model.WordOfDayResponse
 import com.aiko.lingo.data.model.StatsResponse
+import com.aiko.lingo.ui.theme.*
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -48,58 +46,66 @@ fun DashboardScreen(
 ) {
     val uiState by viewModel.uiState.collectAsState()
 
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .safeDrawingPadding()
-            .padding(16.dp)
-    ) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.SpaceBetween
-        ) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                IconButton(onClick = onBack) {
-                    Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
-                }
-                Spacer(modifier = Modifier.width(8.dp))
-                Text("Dashboard", style = MaterialTheme.typography.headlineMedium)
-            }
-            IconButton(onClick = { viewModel.refreshStats() }) {
-                Icon(Icons.Default.Refresh, contentDescription = "Refresh")
-            }
-        }
-
-        Spacer(modifier = Modifier.height(16.dp))
-
-        when (val state = uiState) {
-            DashboardUiState.Loading -> {
-                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                    CircularProgressIndicator()
-                }
-            }
-            is DashboardUiState.Success -> {
-                DashboardContent(
-                    stats = state.stats,
-                    wordOfDay = state.wordOfDay,
-                    onNavigateToReview = onNavigateToReview,
-                    onPlayWord = { text, url -> viewModel.playWord(text, url) }
+    Scaffold(
+        topBar = {
+            TopAppBar(
+                title = { Text("Your Stats ✨", fontWeight = FontWeight.ExtraBold, color = ShoujoText) },
+                navigationIcon = {
+                    IconButton(onClick = onBack) {
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back", tint = ShoujoText)
+                    }
+                },
+                actions = {
+                    IconButton(onClick = { viewModel.refreshStats() }) {
+                        Icon(Icons.Default.Refresh, contentDescription = "Refresh", tint = ShoujoText)
+                    }
+                },
+                colors = TopAppBarDefaults.topAppBarColors(
+                    containerColor = MaterialTheme.colorScheme.background
                 )
-            }
-            is DashboardUiState.Error -> {
-                Column(
-                    modifier = Modifier.fillMaxSize(),
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.Center
-                ) {
-                    Text("Error: ${state.message}", color = Color.Red, textAlign = TextAlign.Center)
-                    Spacer(modifier = Modifier.height(16.dp))
-                    Button(onClick = { viewModel.refreshStats() }) {
-                        Text("Retry")
+            )
+        }
+    ) { padding ->
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(padding)
+                .padding(horizontal = 16.dp)
+                .verticalScroll(rememberScrollState())
+        ) {
+            when (val state = uiState) {
+                DashboardUiState.Loading -> {
+                    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                        CircularProgressIndicator(color = ShoujoAccent)
+                    }
+                }
+                is DashboardUiState.Success -> {
+                    DashboardContent(
+                        stats = state.stats,
+                        wordOfDay = state.wordOfDay,
+                        onNavigateToReview = onNavigateToReview,
+                        onPlayWord = { text, url -> viewModel.playWord(text, url) }
+                    )
+                }
+                is DashboardUiState.Error -> {
+                    Column(
+                        modifier = Modifier.fillMaxSize(),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.Center
+                    ) {
+                        Text("Oops! Stats failed to load.", color = Color.Red, textAlign = TextAlign.Center)
+                        Spacer(modifier = Modifier.height(16.dp))
+                        Button(
+                            onClick = { viewModel.refreshStats() },
+                            colors = ButtonDefaults.buttonColors(containerColor = PastelBlueDark),
+                            shape = RoundedCornerShape(16.dp)
+                        ) {
+                            Text("Retry")
+                        }
                     }
                 }
             }
+            Spacer(modifier = Modifier.height(48.dp))
         }
     }
 }
@@ -114,36 +120,49 @@ private fun DashboardContent(
     Column(modifier = Modifier.fillMaxSize()) {
         wordOfDay?.let { WordOfDayCard(it, onPlayWord) }
 
-        Spacer(modifier = Modifier.height(16.dp))
+        Spacer(modifier = Modifier.height(24.dp))
 
         XPCard(stats)
 
-        Spacer(modifier = Modifier.height(16.dp))
+        Spacer(modifier = Modifier.height(24.dp))
 
         StreakCard(stats)
 
-        Spacer(modifier = Modifier.height(16.dp))
+        Spacer(modifier = Modifier.height(32.dp))
+
+        Text(
+            "Learning Progress 🌸",
+            style = MaterialTheme.typography.titleLarge,
+            fontWeight = FontWeight.ExtraBold,
+            color = ShoujoText,
+            modifier = Modifier.padding(bottom = 16.dp)
+        )
 
         StatsGrid(stats)
 
         if (stats.weak_vocab.isNotEmpty()) {
-            Spacer(modifier = Modifier.height(16.dp))
+            Spacer(modifier = Modifier.height(32.dp))
             WeakVocabCard(stats.weak_vocab, onNavigateToReview)
         }
 
-        Spacer(modifier = Modifier.height(16.dp))
+        Spacer(modifier = Modifier.height(32.dp))
 
         if (stats.cards_due > 0) {
             Button(
                 onClick = { onNavigateToReview("SRS") },
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(56.dp),
-                shape = RoundedCornerShape(12.dp)
+                    .height(64.dp)
+                    .shadow(8.dp, RoundedCornerShape(32.dp)),
+                shape = RoundedCornerShape(32.dp),
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = PastelGreenDark,
+                    contentColor = Color.White
+                )
             ) {
                 Icon(Icons.Default.Refresh, contentDescription = "Review")
-                Spacer(modifier = Modifier.width(8.dp))
-                Text("Review ${stats.cards_due} cards", fontSize = 16.sp)
+                Spacer(modifier = Modifier.width(12.dp))
+                Text("Start Your Review (${stats.cards_due})", fontSize = 18.sp, fontWeight = FontWeight.ExtraBold)
             }
         }
     }
@@ -152,27 +171,41 @@ private fun DashboardContent(
 @Composable
 private fun WordOfDayCard(word: WordOfDayResponse, onPlayWord: (String, String?) -> Unit) {
     Card(
-        modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(12.dp)
+        modifier = Modifier.fillMaxWidth().shadow(4.dp, RoundedCornerShape(32.dp)),
+        shape = RoundedCornerShape(32.dp),
+        colors = CardDefaults.cardColors(containerColor = PastelYellow)
     ) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(16.dp),
+                .padding(24.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
             Column(modifier = Modifier.weight(1f)) {
-                Text("📖 Word of the Day", style = MaterialTheme.typography.labelMedium)
-                Spacer(modifier = Modifier.height(4.dp))
-                Text(word.hiragana, fontSize = 26.sp, fontWeight = FontWeight.Bold)
-                Text(word.meaning, fontSize = 16.sp)
-                if (word.context.isNotBlank()) {
-                    Spacer(modifier = Modifier.height(4.dp))
-                    Text(word.context, fontSize = 13.sp, color = Color.Gray)
+                Surface(
+                    color = PastelYellowDark.copy(alpha = 0.5f),
+                    shape = RoundedCornerShape(10.dp)
+                ) {
+                    Text(
+                        "WORD OF THE DAY 📖",
+                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
+                        style = MaterialTheme.typography.labelSmall,
+                        fontWeight = FontWeight.ExtraBold,
+                        color = Color(0xFF6D4C41)
+                    )
                 }
+                Spacer(modifier = Modifier.height(12.dp))
+                Text(word.hiragana, fontSize = 36.sp, fontWeight = FontWeight.ExtraBold, color = ShoujoText)
+                Text(word.meaning, fontSize = 20.sp, color = ShoujoText.copy(alpha = 0.8f))
             }
-            IconButton(onClick = { onPlayWord(word.hiragana, word.audioUrl) }) {
-                Icon(Icons.Default.PlayArrow, contentDescription = "Play word")
+            IconButton(
+                onClick = { onPlayWord(word.hiragana, word.audioUrl) },
+                modifier = Modifier
+                    .size(64.dp)
+                    .background(Color.White, RoundedCornerShape(32.dp))
+                    .shadow(2.dp, RoundedCornerShape(32.dp))
+            ) {
+                Icon(Icons.Default.PlayArrow, contentDescription = "Play", tint = PastelYellowDark, modifier = Modifier.size(36.dp))
             }
         }
     }
@@ -181,64 +214,53 @@ private fun WordOfDayCard(word: WordOfDayResponse, onPlayWord: (String, String?)
 @Composable
 private fun WeakVocabCard(weakVocab: List<ReviewCard>, onNavigateToReview: (String) -> Unit) {
     Card(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(16.dp)),
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.errorContainer
-        )
+        modifier = Modifier.fillMaxWidth().shadow(4.dp, RoundedCornerShape(32.dp)),
+        shape = RoundedCornerShape(32.dp),
+        colors = CardDefaults.cardColors(containerColor = Color(0xFFFFEBEE))
     ) {
-        Column(modifier = Modifier.padding(16.dp)) {
+        Column(modifier = Modifier.padding(24.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text("🎯", fontSize = 28.sp)
+                Spacer(modifier = Modifier.width(12.dp))
+                Text(
+                    "Tricky Words",
+                    style = MaterialTheme.typography.titleLarge,
+                    fontWeight = FontWeight.ExtraBold,
+                    color = Color(0xFFB71C1C)
+                )
+            }
             Text(
-                "🎯 Practice These",
-                style = MaterialTheme.typography.titleSmall,
-                fontWeight = FontWeight.Bold,
-                color = MaterialTheme.colorScheme.onErrorContainer
+                "Focus on words you've missed",
+                style = MaterialTheme.typography.bodyMedium,
+                color = Color.Gray
             )
-            Text(
-                "Words you've been missing lately",
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onErrorContainer
-            )
-            Spacer(modifier = Modifier.height(12.dp))
-            LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                items(weakVocab.take(6), key = { it.card_id }) { card ->
-                    Card(
-                        modifier = Modifier
-                            .width(110.dp)
-                            .clip(RoundedCornerShape(12.dp)),
-                        colors = CardDefaults.cardColors(
-                            containerColor = MaterialTheme.colorScheme.surface
-                        )
+            Spacer(modifier = Modifier.height(20.dp))
+            LazyRow(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+                items(weakVocab.take(5), key = { it.card_id }) { card ->
+                    Surface(
+                        modifier = Modifier.width(130.dp),
+                        shape = RoundedCornerShape(20.dp),
+                        color = Color.White,
+                        shadowElevation = 2.dp
                     ) {
                         Column(
-                            modifier = Modifier
-                                .padding(10.dp)
-                                .fillMaxWidth(),
+                            modifier = Modifier.padding(16.dp),
                             horizontalAlignment = Alignment.CenterHorizontally
                         ) {
-                            Text(
-                                card.hiragana,
-                                fontSize = 16.sp,
-                                fontWeight = FontWeight.Bold,
-                                textAlign = TextAlign.Center,
-                                maxLines = 1
-                            )
-                            Spacer(modifier = Modifier.height(4.dp))
-                            Text(
-                                card.meaning,
-                                fontSize = 11.sp,
-                                textAlign = TextAlign.Center,
-                                maxLines = 2,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
+                            Text(card.hiragana, fontWeight = FontWeight.ExtraBold, fontSize = 20.sp, color = ShoujoText)
+                            Text(card.meaning, fontSize = 12.sp, textAlign = TextAlign.Center, maxLines = 1, color = Color.Gray)
                         }
                     }
                 }
             }
-            Spacer(modifier = Modifier.height(12.dp))
-            TextButton(onClick = { onNavigateToReview("PRACTICE") }) {
-                Text("Practice now →")
+            Spacer(modifier = Modifier.height(24.dp))
+            Button(
+                onClick = { onNavigateToReview("PRACTICE") },
+                modifier = Modifier.fillMaxWidth().height(52.dp),
+                shape = RoundedCornerShape(16.dp),
+                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFEF5350))
+            ) {
+                Text("Practice Weak Spots", fontWeight = FontWeight.ExtraBold, fontSize = 16.sp)
             }
         }
     }
@@ -249,34 +271,28 @@ private fun XPCard(stats: StatsResponse) {
     val progressPercentage = stats.xp % 100 / 100f
     
     Card(
-        modifier = Modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.primaryContainer
-        )
+        modifier = Modifier.fillMaxWidth().shadow(4.dp, RoundedCornerShape(32.dp)),
+        shape = RoundedCornerShape(32.dp),
+        colors = CardDefaults.cardColors(containerColor = PastelBlue)
     ) {
         Row(
-            modifier = Modifier.padding(20.dp),
+            modifier = Modifier.padding(24.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            // DUOLINGO UPGRADE: Circular Progress for XP
             Box(contentAlignment = Alignment.Center) {
                 CircularProgressIndicator(
                     progress = { progressPercentage },
-                    modifier = Modifier.size(80.dp),
-                    strokeWidth = 8.dp,
-                    color = MaterialTheme.colorScheme.primary,
-                    trackColor = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.1f)
+                    modifier = Modifier.size(90.dp),
+                    strokeWidth = 12.dp,
+                    color = PastelBlueDark,
+                    trackColor = Color.White.copy(alpha = 0.5f)
                 )
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
                     Text(
                         "${stats.level}",
-                        style = MaterialTheme.typography.headlineMedium,
-                        fontWeight = FontWeight.Bold
-                    )
-                    Text(
-                        "LVL",
-                        style = MaterialTheme.typography.labelSmall,
-                        fontSize = 10.sp
+                        style = MaterialTheme.typography.headlineLarge,
+                        fontWeight = FontWeight.ExtraBold,
+                        color = PastelBlueDark
                     )
                 }
             }
@@ -286,32 +302,34 @@ private fun XPCard(stats: StatsResponse) {
             Column(modifier = Modifier.weight(1f)) {
                 Text(
                     "Daily Progress",
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Bold
+                    style = MaterialTheme.typography.titleLarge,
+                    fontWeight = FontWeight.ExtraBold,
+                    color = ShoujoText
                 )
                 Text(
-                    "${stats.xp} Total XP",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.7f)
+                    "${stats.xp} Total XP ✨",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = ShoujoText.copy(alpha = 0.6f)
                 )
                 
-                Spacer(modifier = Modifier.height(8.dp))
+                Spacer(modifier = Modifier.height(12.dp))
                 
                 LinearProgressIndicator(
                     progress = { progressPercentage },
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(8.dp)
-                        .clip(RoundedCornerShape(4.dp))
+                        .height(14.dp)
+                        .clip(RoundedCornerShape(7.dp)),
+                    color = PastelBlueDark,
+                    trackColor = Color.White
                 )
-                
-                Spacer(modifier = Modifier.height(4.dp))
                 
                 Text(
                     "${100 - (stats.xp % 100)} XP to next level",
+                    modifier = Modifier.padding(top = 6.dp),
                     style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.primary,
-                    fontWeight = FontWeight.Bold
+                    fontWeight = FontWeight.ExtraBold,
+                    color = PastelBlueDark
                 )
             }
         }
@@ -321,43 +339,29 @@ private fun XPCard(stats: StatsResponse) {
 @Composable
 private fun StreakCard(stats: StatsResponse) {
     Card(
-        modifier = Modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.secondaryContainer
-        )
+        modifier = Modifier.fillMaxWidth().shadow(4.dp, RoundedCornerShape(32.dp)),
+        shape = RoundedCornerShape(32.dp),
+        colors = CardDefaults.cardColors(containerColor = PastelOrange)
     ) {
         Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(20.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.SpaceBetween
+            modifier = Modifier.padding(24.dp),
+            verticalAlignment = Alignment.CenterVertically
         ) {
+            Text("🔥", fontSize = 56.sp)
+            Spacer(modifier = Modifier.width(20.dp))
             Column {
                 Text(
-                    "🔥 Current Streak",
-                    style = MaterialTheme.typography.labelMedium,
-                    fontWeight = FontWeight.Bold
-                )
-                Text(
-                    "${stats.streak.days} days",
-                    style = MaterialTheme.typography.headlineSmall,
-                    fontWeight = FontWeight.Bold
+                    "${stats.streak.days} Day Streak!",
+                    style = MaterialTheme.typography.headlineMedium,
+                    fontWeight = FontWeight.ExtraBold,
+                    color = Color(0xFFD84315)
                 )
                 Text(
                     stats.streak.next_reward,
-                    style = MaterialTheme.typography.labelSmall,
-                    fontSize = 12.sp
+                    style = MaterialTheme.typography.bodyLarge,
+                    fontWeight = FontWeight.Bold,
+                    color = Color(0xFFE64A19).copy(alpha = 0.8f)
                 )
-            }
-            Box(
-                modifier = Modifier
-                    .size(70.dp)
-                    .clip(RoundedCornerShape(12.dp))
-                    .background(MaterialTheme.colorScheme.secondary),
-                contentAlignment = Alignment.Center
-            ) {
-                Text("${stats.streak.days}", fontSize = 28.sp, fontWeight = FontWeight.Bold)
             }
         }
     }
@@ -365,88 +369,32 @@ private fun StreakCard(stats: StatsResponse) {
 
 @Composable
 private fun StatsGrid(stats: StatsResponse) {
-    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(12.dp)
-        ) {
-            StatBox(
-                icon = "📚",
-                label = "Total Cards",
-                value = stats.total_cards.toString(),
-                modifier = Modifier.weight(1f)
-            )
-            StatBox(
-                icon = "✨",
-                label = "Learned Today",
-                value = stats.learned_today.toString(),
-                modifier = Modifier.weight(1f)
-            )
+    Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
+        Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+            StatBox("📚", "Total Words", stats.total_cards.toString(), PastelPurple, Modifier.weight(1f))
+            StatBox("✨", "Learned", stats.learned_today.toString(), PastelGreen, Modifier.weight(1f))
         }
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(12.dp)
-        ) {
-            StatBox(
-                icon = "🎯",
-                label = "Reviews Today",
-                value = stats.reviews_today.toString(),
-                modifier = Modifier.weight(1f)
-            )
-            StatBox(
-                icon = "📊",
-                label = "Avg Ease",
-                value = "%.1f".format(stats.avg_ease),
-                modifier = Modifier.weight(1f)
-            )
-        }
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(12.dp)
-        ) {
-            StatBox(
-                icon = "⏰",
-                label = "Due Now",
-                value = stats.cards_due.toString(),
-                modifier = Modifier.weight(1f)
-            )
-            StatBox(
-                icon = "🎮",
-                label = "Level",
-                value = stats.last_level.replaceFirstChar { it.uppercase() },
-                modifier = Modifier.weight(1f)
-            )
+        Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+            StatBox("🎯", "Reviews", stats.reviews_today.toString(), PastelOrange, Modifier.weight(1f))
+            StatBox("📊", "Memory Ease", "%.1f".format(stats.avg_ease), PastelBlue, Modifier.weight(1f))
         }
     }
 }
 
 @Composable
-private fun StatBox(
-    icon: String,
-    label: String,
-    value: String,
-    modifier: Modifier = Modifier
-) {
-    Card(modifier = modifier) {
+private fun StatBox(icon: String, label: String, value: String, color: Color, modifier: Modifier) {
+    Surface(
+        modifier = modifier.shadow(2.dp, RoundedCornerShape(24.dp)),
+        shape = RoundedCornerShape(24.dp),
+        color = color
+    ) {
         Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(12.dp),
+            modifier = Modifier.padding(20.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            Text(icon, fontSize = 24.sp)
-            Spacer(modifier = Modifier.height(4.dp))
-            Text(
-                label,
-                style = MaterialTheme.typography.labelSmall,
-                fontSize = 10.sp,
-                textAlign = TextAlign.Center
-            )
-            Text(
-                value,
-                style = MaterialTheme.typography.headlineSmall,
-                fontWeight = FontWeight.Bold
-            )
+            Text(icon, fontSize = 32.sp)
+            Text(label, style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold, color = ShoujoText.copy(alpha = 0.5f))
+            Text(value, style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.ExtraBold, color = ShoujoText)
         }
     }
 }

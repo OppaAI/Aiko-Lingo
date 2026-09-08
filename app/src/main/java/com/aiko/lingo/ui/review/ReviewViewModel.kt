@@ -30,6 +30,13 @@ DUOLINGO-STYLE UPGRADES (this version):
   5. Added `choices` StateFlow to support Multiple Choice questions,
      a staple Duolingo feature. It automatically generates 3
      distractors from other cards in the current session.
+
+SRS CHOICE FIX (this version):
+  6. In SRS mode, we often only have one card at a time. Fixed
+     generateChoices to fetch a fallback pool of weak vocabulary
+     to use as distractors if the current session pool is empty.
+  7. Added a hardcoded fallback list of common Japanese meanings to
+     ensure 4 choices are ALWAYS present even for brand-new users.
 =====================================================================
 */
 
@@ -47,7 +54,8 @@ import retrofit2.HttpException
 
 enum class ReviewMode {
     SRS, // Standard spaced-repetition due cards
-    PRACTICE // Targeted practice for weak vocabulary
+    PRACTICE, // Targeted practice for weak vocabulary
+    LEARN // Placeholder for learning new vocabulary (using weak pool for now)
 }
 
 class ReviewViewModel(private val apiService: AikoApiService) : ViewModel() {
@@ -72,7 +80,14 @@ class ReviewViewModel(private val apiService: AikoApiService) : ViewModel() {
     val choices = _choices.asStateFlow()
 
     private var allCardsInSession = listOf<ReviewCard>()
+    private var distractorPool = listOf<String>()
     private var currentMode = ReviewMode.SRS
+
+    private val FALLBACK_MEANINGS = listOf(
+        "to go", "to come", "to see", "to drink", "to eat",
+        "friend", "family", "school", "water", "apple",
+        "good", "bad", "happy", "sad", "big", "small"
+    )
 
     fun setMode(mode: ReviewMode) {
         currentMode = mode
@@ -86,26 +101,38 @@ class ReviewViewModel(private val apiService: AikoApiService) : ViewModel() {
     private fun loadCards() {
         viewModelScope.launch {
             _uiState.value = ReviewUiState.Loading
+            
+            // Prefetch a pool of potential distractors in the background
+            launch {
+                try {
+                    val weak = apiService.getWeakVocab()
+                    distractorPool = weak.map { it.meaning }
+                } catch (e: Exception) {
+                    Log.w("Review", "Failed to fetch distractor pool", e)
+                }
+            }
+
             try {
-                if (currentMode == ReviewMode.PRACTICE) {
-                    val cards = apiService.getWeakVocab()
-                    if (cards.isEmpty()) {
-                        _uiState.value = ReviewUiState.Finished(0)
-                    } else {
-                        allCardsInSession = cards
-                        _currentCard.value = cards.first()
-                        _cardsDue.value = cards.size
-                        _uiState.value = ReviewUiState.Reviewing
-                        generateChoices(cards.first())
+                when (currentMode) {
+                    ReviewMode.PRACTICE, ReviewMode.LEARN -> {
+                        val cards = apiService.getWeakVocab()
+                        if (cards.isEmpty()) {
+                            _uiState.value = ReviewUiState.Finished(0)
+                        } else {
+                            allCardsInSession = cards
+                            _currentCard.value = cards.first()
+                            _cardsDue.value = cards.size
+                            _uiState.value = ReviewUiState.Reviewing
+                            generateChoices(cards.first())
+                        }
                     }
-                } else {
-                    val response = apiService.startReviewSession()
-                    _currentCard.value = response.first_card
-                    _cardsDue.value = response.cards_due
-                    // We don't have the full list for SRS yet, so generateChoices 
-                    // will use a fallback or wait for more cards.
-                    _uiState.value = ReviewUiState.Reviewing
-                    generateChoices(response.first_card)
+                    ReviewMode.SRS -> {
+                        val response = apiService.startReviewSession()
+                        _currentCard.value = response.first_card
+                        _cardsDue.value = response.cards_due
+                        _uiState.value = ReviewUiState.Reviewing
+                        generateChoices(response.first_card)
+                    }
                 }
             } catch (e: HttpException) {
                 if (e.code() == 400) {
@@ -124,16 +151,29 @@ class ReviewViewModel(private val apiService: AikoApiService) : ViewModel() {
     }
 
     private fun generateChoices(correctCard: ReviewCard) {
-        // DUOLINGO UPGRADE: Create multiple choice options.
-        // If we have a pool of cards (Practice mode), use them as distractors.
-        // Otherwise, use generic distractors for now.
-        val distractors = allCardsInSession
+        val sessionDistractors = allCardsInSession
             .filter { it.card_id != correctCard.card_id }
             .map { it.meaning }
+            
+        val poolDistractors = distractorPool
+            .filter { it != correctCard.meaning && it !in sessionDistractors }
+            
+        var combinedDistractors = (sessionDistractors + poolDistractors)
+            .distinct()
             .shuffled()
             .take(3)
         
-        val finalChoices = (distractors + correctCard.meaning).shuffled()
+        // Final fallback distractors if we still don't have 3
+        if (combinedDistractors.size < 3) {
+            val needed = 3 - combinedDistractors.size
+            val extraDistractors = FALLBACK_MEANINGS
+                .filter { it != correctCard.meaning && it !in combinedDistractors }
+                .shuffled()
+                .take(needed)
+            combinedDistractors = combinedDistractors + extraDistractors
+        }
+
+        val finalChoices = (combinedDistractors + correctCard.meaning).shuffled()
         _choices.value = finalChoices
     }
 
