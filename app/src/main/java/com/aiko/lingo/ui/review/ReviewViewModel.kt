@@ -86,7 +86,9 @@ class ReviewViewModel(private val apiService: AikoApiService) : ViewModel() {
     private val FALLBACK_MEANINGS = listOf(
         "to go", "to come", "to see", "to drink", "to eat",
         "friend", "family", "school", "water", "apple",
-        "good", "bad", "happy", "sad", "big", "small"
+        "good", "bad", "happy", "sad", "big", "small",
+        "How are you?", "Good morning", "Thank you", "Excuse me",
+        "Nice to meet you", "See you later", "I hope so", "That's right"
     )
 
     fun setMode(mode: ReviewMode) {
@@ -115,7 +117,22 @@ class ReviewViewModel(private val apiService: AikoApiService) : ViewModel() {
             try {
                 when (currentMode) {
                     ReviewMode.PRACTICE, ReviewMode.LEARN -> {
-                        val cards = apiService.getWeakVocab()
+                        Log.d("Review", "Loading cards for mode: $currentMode")
+                        var cards = apiService.getWeakVocab()
+
+                        // FIX: If no weak vocab, try to pull from the main review queue for "Learn" mode
+                        if (cards.isEmpty() && currentMode == ReviewMode.LEARN) {
+                            Log.d("Review", "Weak pool empty, trying SRS queue for learning")
+                            try {
+                                val srs = apiService.startReviewSession()
+                                cards = listOf(srs.first_card)
+                            } catch (e: Exception) {
+                                Log.w("Review", "SRS queue also unavailable", e)
+                            }
+                        }
+
+                        Log.d("Review", "Final card count for $currentMode: ${cards.size}")
+
                         if (cards.isEmpty()) {
                             _uiState.value = ReviewUiState.Finished(0)
                         } else {
@@ -127,7 +144,9 @@ class ReviewViewModel(private val apiService: AikoApiService) : ViewModel() {
                         }
                     }
                     ReviewMode.SRS -> {
+                        Log.d("Review", "Loading SRS cards")
                         val response = apiService.startReviewSession()
+                        Log.d("Review", "SRS session started: ${response.cards_due} cards, first: ${response.first_card.hiragana}")
                         _currentCard.value = response.first_card
                         _cardsDue.value = response.cards_due
                         _uiState.value = ReviewUiState.Reviewing

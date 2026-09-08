@@ -20,6 +20,8 @@ import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -187,7 +189,8 @@ private fun ColumnScope.ReviewCardContent(
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .weight(1f),
+            .weight(1f)
+            .verticalScroll(rememberScrollState()),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
         Card(
@@ -218,12 +221,19 @@ private fun ColumnScope.ReviewCardContent(
                 }
                 Spacer(modifier = Modifier.height(24.dp))
                 Text(
-                    card.hiragana,
-                    style = MaterialTheme.typography.displayMedium,
+                    text = card.kanji ?: card.hiragana,
+                    style = MaterialTheme.typography.displaySmall,
                     fontWeight = FontWeight.ExtraBold,
                     color = ShoujoText,
                     textAlign = TextAlign.Center
                 )
+                if (card.kanji != null) {
+                    Text(
+                        text = card.hiragana,
+                        style = MaterialTheme.typography.titleMedium,
+                        color = Color.Gray
+                    )
+                }
                 if (card.context.isNotEmpty()) {
                     Spacer(modifier = Modifier.height(16.dp))
                     Text(
@@ -364,7 +374,7 @@ private fun ReviewFinishedScreen(
         Spacer(modifier = Modifier.height(32.dp))
 
         Text(
-            "Goal Reached!",
+            if (reviewsCompleted > 0) "Goal Reached!" else "All Caught Up!",
             style = MaterialTheme.typography.headlineLarge,
             fontWeight = FontWeight.ExtraBold,
             color = PastelGreenDark
@@ -380,13 +390,23 @@ private fun ReviewFinishedScreen(
                 modifier = Modifier.padding(32.dp),
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
-                Text(
-                    "You mastered $reviewsCompleted words!",
-                    style = MaterialTheme.typography.titleLarge,
-                    fontWeight = FontWeight.ExtraBold,
-                    textAlign = TextAlign.Center,
-                    color = ShoujoText
-                )
+                if (reviewsCompleted > 0) {
+                    Text(
+                        "You mastered $reviewsCompleted words!",
+                        style = MaterialTheme.typography.titleLarge,
+                        fontWeight = FontWeight.ExtraBold,
+                        textAlign = TextAlign.Center,
+                        color = ShoujoText
+                    )
+                } else {
+                    Text(
+                        "No new cards to learn today ♡",
+                        style = MaterialTheme.typography.titleLarge,
+                        fontWeight = FontWeight.ExtraBold,
+                        textAlign = TextAlign.Center,
+                        color = ShoujoText
+                    )
+                }
                 if (cardsRemaining > 0) {
                     Spacer(modifier = Modifier.height(8.dp))
                     Text(
@@ -397,10 +417,11 @@ private fun ReviewFinishedScreen(
                 }
                 Spacer(modifier = Modifier.height(16.dp))
                 Text(
-                    "You're becoming a Nihongo pro! ♡",
+                    if (reviewsCompleted > 0) "You're becoming a Nihongo pro! ♡" else "Chat with Aiko to discover new words! ✨",
                     style = MaterialTheme.typography.bodyLarge,
                     fontWeight = FontWeight.Bold,
-                    color = PastelGreenDark
+                    color = PastelGreenDark,
+                    textAlign = TextAlign.Center
                 )
             }
         }

@@ -72,7 +72,8 @@ data class ReviewCard(
     val card_id: Int,
     val hiragana: String,
     val meaning: String,
-    val context: String
+    val context: String,
+    val kanji: String? = null // NEW: optional Kanji field for better readability
 )
 
 @Serializable
@@ -131,7 +132,8 @@ data class WordOfDayResponse(
     val meaning: String,
     val context: String = "",
     val audioUrl: String? = null,
-    val date: String = ""
+    val date: String = "",
+    val kanji: String? = null // NEW: support Kanji for Word of the Day
 )
 
 @Serializable

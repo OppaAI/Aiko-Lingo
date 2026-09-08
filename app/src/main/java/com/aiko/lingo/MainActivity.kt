@@ -1,13 +1,14 @@
 package com.aiko.lingo
 
 import android.os.Bundle
+import android.util.Log
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.lazy.grid.GridCells
-import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -154,7 +155,7 @@ fun MainMenu(
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .safeDrawingPadding()
+            .verticalScroll(rememberScrollState())
             .padding(24.dp),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
@@ -186,68 +187,29 @@ fun MainMenu(
             color = Color.Gray
         )
         
-        LazyVerticalGrid(
-            columns = GridCells.Fixed(2),
-            modifier = Modifier.weight(1f),
-            contentPadding = PaddingValues(8.dp),
-            horizontalArrangement = Arrangement.spacedBy(16.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp)
-        ) {
-            item {
-                CuteMenuCard(
-                    text = "Learn",
-                    icon = "✨",
-                    color = PastelGreen,
-                    onClick = onNavigateToLearn
-                )
-            }
-            item {
-                CuteMenuCard(
-                    text = "Review",
-                    icon = "📚",
-                    color = PastelBlue,
-                    onClick = onNavigateToReview
-                )
-            }
-            item {
-                CuteMenuCard(
-                    text = "Chat",
-                    icon = "♡",
-                    color = ShoujoPink,
-                    onClick = onNavigateToConversation
-                )
-            }
-            item {
-                CuteMenuCard(
-                    text = "Translate",
-                    icon = "✦",
-                    color = PastelOrange,
-                    onClick = onNavigateToTranslate
-                )
-            }
-            item {
-                CuteMenuCard(
-                    text = "Stats",
-                    icon = "📊",
-                    color = PastelPurple,
-                    onClick = onNavigateToDashboard
-                )
-            }
-            item {
-                CuteMenuCard(
-                    text = "Ranks",
-                    icon = "🏆",
-                    color = PastelYellow,
-                    onClick = onNavigateToLeaderboard
-                )
-            }
+        MenuRow {
+            CuteMenuCard(text = "Learn", icon = "✨", color = PastelGreen, modifier = Modifier.weight(1f), onClick = onNavigateToLearn)
+            Spacer(modifier = Modifier.width(16.dp))
+            CuteMenuCard(text = "Review", icon = "📚", color = PastelBlue, modifier = Modifier.weight(1f), onClick = onNavigateToReview)
+        }
+        Spacer(modifier = Modifier.height(16.dp))
+        MenuRow {
+            CuteMenuCard(text = "Chat", icon = "♡", color = ShoujoPink, modifier = Modifier.weight(1f), onClick = onNavigateToConversation)
+            Spacer(modifier = Modifier.width(16.dp))
+            CuteMenuCard(text = "Translate", icon = "✦", color = PastelOrange, modifier = Modifier.weight(1f), onClick = onNavigateToTranslate)
+        }
+        Spacer(modifier = Modifier.height(16.dp))
+        MenuRow {
+            CuteMenuCard(text = "Stats", icon = "📊", color = PastelPurple, modifier = Modifier.weight(1f), onClick = onNavigateToDashboard)
+            Spacer(modifier = Modifier.width(16.dp))
+            CuteMenuCard(text = "Ranks", icon = "🏆", color = PastelYellow, modifier = Modifier.weight(1f), onClick = onNavigateToLeaderboard)
         }
         
-        Spacer(modifier = Modifier.height(24.dp))
+        Spacer(modifier = Modifier.height(48.dp))
         
         TextButton(
             onClick = onToggleTheme,
-            modifier = Modifier.padding(bottom = 16.dp)
+            modifier = Modifier.padding(bottom = 32.dp)
         ) {
             Text("✨ Switch Aesthetic ✨", fontWeight = FontWeight.Bold)
         }
@@ -255,17 +217,25 @@ fun MainMenu(
 }
 
 @Composable
+fun MenuRow(content: @Composable RowScope.() -> Unit) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(16.dp),
+        content = content
+    )
+}
+
+@Composable
 fun CuteMenuCard(
     text: String,
     icon: String,
     color: Color,
+    modifier: Modifier = Modifier,
     onClick: () -> Unit
 ) {
     Card(
         onClick = onClick,
-        modifier = Modifier
-            .fillMaxWidth()
-            .height(110.dp),
+        modifier = modifier.height(110.dp),
         shape = RoundedCornerShape(28.dp),
         colors = CardDefaults.cardColors(
             containerColor = color

@@ -169,7 +169,7 @@ private fun DashboardContent(
             ) {
                 Icon(Icons.Default.Refresh, contentDescription = "Review")
                 Spacer(modifier = Modifier.width(12.dp))
-                Text("Start Your Review (${stats.cards_due})", fontSize = 18.sp, fontWeight = FontWeight.ExtraBold)
+                Text("Start Practice (${stats.cards_due})", fontSize = 18.sp, fontWeight = FontWeight.ExtraBold)
             }
         }
     }
@@ -202,7 +202,19 @@ private fun WordOfDayCard(word: WordOfDayResponse, onPlayWord: (String, String?)
                     )
                 }
                 Spacer(modifier = Modifier.height(12.dp))
-                Text(word.hiragana, fontSize = 36.sp, fontWeight = FontWeight.ExtraBold, color = ShoujoText)
+                Text(
+                    text = word.kanji ?: word.hiragana,
+                    fontSize = 36.sp,
+                    fontWeight = FontWeight.ExtraBold,
+                    color = ShoujoText
+                )
+                if (word.kanji != null) {
+                    Text(
+                        text = word.hiragana,
+                        fontSize = 16.sp,
+                        color = ShoujoText.copy(alpha = 0.6f)
+                    )
+                }
                 Text(word.meaning, fontSize = 20.sp, color = ShoujoText.copy(alpha = 0.8f))
             }
             IconButton(
@@ -382,7 +394,7 @@ private fun StatsGrid(stats: StatsResponse) {
             StatBox("✨", "Learned", stats.learned_today.toString(), PastelGreen, Modifier.weight(1f))
         }
         Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-            StatBox("🎯", "Reviews", stats.reviews_today.toString(), PastelOrange, Modifier.weight(1f))
+            StatBox("🎯", "Practice", stats.reviews_today.toString(), PastelOrange, Modifier.weight(1f))
             StatBox("📊", "Memory Ease", "%.1f".format(stats.avg_ease), PastelBlue, Modifier.weight(1f))
         }
     }
