@@ -36,6 +36,8 @@ import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Send
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -217,4 +219,19 @@ fun TranslationCard(
                 )
                 Text(
                     text = translation.text,
-                    style
+                    style = MaterialTheme.typography.bodyLarge
+                )
+            }
+            IconButton(
+                onClick = onPlayAudio,
+                enabled = !isAudioLoading
+            ) {
+                if (isAudioLoading) {
+                    CircularProgressIndicator(modifier = Modifier.size(24.dp))
+                } else {
+                    Icon(Icons.Default.PlayArrow, contentDescription = "Play Audio")
+                }
+            }
+        }
+    }
+}
