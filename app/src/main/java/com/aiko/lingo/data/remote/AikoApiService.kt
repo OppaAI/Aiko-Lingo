@@ -12,8 +12,11 @@ BUGFIX PASS (this version):
      Per audit: the backend only ever implemented the streaming variant
      (respond_stream), so this was a dead interface method pointing at a
      404. The frontend never called it -- ConversationViewModel always
-     uses respondToConversationStream(). If a non-streaming path is ever
-     actually needed, re-add this once the backend implements it.
+     uses respondToConversationStream().
+     NOTE: the backend HAS since implemented POST
+     api/english/conversation/respond (non-streaming, same
+     post-processing as the stream: SRS insert, audio, XP, toast), so the
+     method is re-exposed below for fast-retry / low-bandwidth callers.
 =====================================================================
 */
 
@@ -30,6 +33,12 @@ interface AikoApiService {
     @Streaming
     @POST("api/english/conversation/respond_stream")
     suspend fun respondToConversationStream(@Body request: ConversationRespondRequest): ResponseBody
+
+    // Non-streaming counterpart (backend shares post-processing with the
+    // stream: vocab/SRS insert, audioUrl, streak+XP, toast). Used for
+    // fast retry when the stream fails mid-turn.
+    @POST("api/english/conversation/respond")
+    suspend fun respondToConversation(@Body request: ConversationRespondRequest): ConversationResponse
 
     @POST("api/english/conversation/hint")
     suspend fun getHint(): ConversationHintResponse
@@ -55,6 +64,10 @@ interface AikoApiService {
     // but exposed standalone so screens that don't need full stats can fetch just this).
     @GET("api/english/weak-vocab")
     suspend fun getWeakVocab(): List<ReviewCard>
+
+    // ========== Word of the Day ==========
+    @GET("api/english/word-of-day")
+    suspend fun getWordOfDay(): WordOfDayResponse
 
     // ========== Leaderboard ==========
     @GET("api/english/leaderboard")

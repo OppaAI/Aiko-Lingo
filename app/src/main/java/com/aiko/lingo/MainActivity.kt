@@ -82,6 +82,7 @@ private fun AikoLingoApp(apiService: AikoApiService, onToggleTheme: () -> Unit) 
             MainMenu(
                 onNavigateToTranslate = { navController.navigate("translate") },
                 onNavigateToConversation = { navController.navigate("conversation") },
+                onNavigateToReview = { navController.navigate("review") },
                 onNavigateToDashboard = { navController.navigate("dashboard") },
                 onNavigateToLeaderboard = { navController.navigate("leaderboard") },
                 onToggleTheme = onToggleTheme
@@ -118,6 +119,7 @@ private fun AikoLingoApp(apiService: AikoApiService, onToggleTheme: () -> Unit) 
 fun MainMenu(
     onNavigateToTranslate: () -> Unit,
     onNavigateToConversation: () -> Unit,
+    onNavigateToReview: () -> Unit,
     onNavigateToDashboard: () -> Unit,
     onNavigateToLeaderboard: () -> Unit,
     onToggleTheme: () -> Unit
@@ -144,6 +146,9 @@ fun MainMenu(
         }
         Button(onClick = onNavigateToConversation, modifier = Modifier.padding(top = 12.dp).fillMaxWidth(0.7f)) {
             Text("♡  Conversation")
+        }
+        Button(onClick = onNavigateToReview, modifier = Modifier.padding(top = 12.dp).fillMaxWidth(0.7f)) {
+            Text("📚  Practice")
         }
         Button(onClick = onNavigateToDashboard, modifier = Modifier.padding(top = 12.dp).fillMaxWidth(0.7f)) {
             Text("📊  Dashboard")

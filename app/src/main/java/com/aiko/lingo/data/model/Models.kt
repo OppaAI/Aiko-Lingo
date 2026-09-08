@@ -125,6 +125,16 @@ data class StatsResponse(
 )
 
 @Serializable
+data class WordOfDayResponse(
+    val card_id: Int = 0,
+    val hiragana: String,
+    val meaning: String,
+    val context: String = "",
+    val audioUrl: String? = null,
+    val date: String = ""
+)
+
+@Serializable
 data class Streak(
     val days: Int,
     val total_sessions: Int,

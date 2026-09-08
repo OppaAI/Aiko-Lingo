@@ -18,6 +18,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -30,6 +31,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.aiko.lingo.data.model.ReviewCard
+import com.aiko.lingo.data.model.WordOfDayResponse
 import com.aiko.lingo.data.model.StatsResponse
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -71,7 +73,12 @@ fun DashboardScreen(
                 }
             }
             is DashboardUiState.Success -> {
-                DashboardContent(state.stats, onNavigateToReview)
+                DashboardContent(
+                    stats = state.stats,
+                    wordOfDay = state.wordOfDay,
+                    onNavigateToReview = onNavigateToReview,
+                    onPlayWord = { text, url -> viewModel.playWord(text, url) }
+                )
             }
             is DashboardUiState.Error -> {
                 // FIX: was a dead-end red text label with no way to recover
@@ -93,8 +100,18 @@ fun DashboardScreen(
 }
 
 @Composable
-private fun DashboardContent(stats: StatsResponse, onNavigateToReview: () -> Unit) {
+private fun DashboardContent(
+    stats: StatsResponse,
+    wordOfDay: WordOfDayResponse?,
+    onNavigateToReview: () -> Unit,
+    onPlayWord: (String, String?) -> Unit
+) {
     Column(modifier = Modifier.fillMaxSize()) {
+        // Word of the Day -- Duolingo-style daily vocab spotlight with audio.
+        wordOfDay?.let { WordOfDayCard(it, onPlayWord) }
+
+        Spacer(modifier = Modifier.height(16.dp))
+
         // XP & Level Card
         XPCard(stats)
 
@@ -130,6 +147,35 @@ private fun DashboardContent(stats: StatsResponse, onNavigateToReview: () -> Uni
                 Icon(Icons.Default.Refresh, contentDescription = "Review")
                 Spacer(modifier = Modifier.width(8.dp))
                 Text("Review ${stats.cards_due} cards", fontSize = 16.sp)
+            }
+        }
+    }
+}
+
+@Composable
+private fun WordOfDayCard(word: WordOfDayResponse, onPlayWord: (String, String?) -> Unit) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(12.dp)
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(16.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text("📖 Word of the Day", style = MaterialTheme.typography.labelMedium)
+                Spacer(modifier = Modifier.height(4.dp))
+                Text(word.hiragana, fontSize = 26.sp, fontWeight = FontWeight.Bold)
+                Text(word.meaning, fontSize = 16.sp)
+                if (word.context.isNotBlank()) {
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Text(word.context, fontSize = 13.sp, color = Color.Gray)
+                }
+            }
+            IconButton(onClick = { onPlayWord(word.hiragana, word.audioUrl) }) {
+                Icon(Icons.Default.PlayArrow, contentDescription = "Play word")
             }
         }
     }
