@@ -1,5 +1,6 @@
 package com.aiko.lingo.ui.leaderboard
 
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -78,6 +79,37 @@ private fun LeaderboardContent(leaderboard: LeaderboardResponse) {
     Column(modifier = Modifier.fillMaxSize()) {
         // User's current position
         YourRankCard(leaderboard)
+
+        Spacer(modifier = Modifier.height(16.dp))
+
+        // DUOLINGO UPGRADE: League Badge
+        Surface(
+            modifier = Modifier.fillMaxWidth(),
+            color = Color(0xFFFFD700).copy(alpha = 0.2f),
+            shape = RoundedCornerShape(12.dp),
+            border = BorderStroke(1.dp, Color(0xFFFFD700))
+        ) {
+            Row(
+                modifier = Modifier.padding(12.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text("🏆", fontSize = 24.sp)
+                Spacer(modifier = Modifier.width(12.dp))
+                Column {
+                    Text(
+                        "Gold League",
+                        style = MaterialTheme.typography.titleSmall,
+                        fontWeight = FontWeight.Bold,
+                        color = Color(0xFFB8860B)
+                    )
+                    Text(
+                        "Top 10 users qualify for Emerald League!",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = Color(0xFFB8860B).copy(alpha = 0.8f)
+                    )
+                }
+            }
+        }
 
         Spacer(modifier = Modifier.height(24.dp))
 

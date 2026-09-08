@@ -8,6 +8,11 @@ BUGFIX PASS (this version):
   2. Added a "Practice These" row driven by the new
      StatsResponse.weak_vocab field (cards with a high review-failure
      rate), matching the weak-vocab backend endpoint / SRS addition.
+
+DUOLINGO-STYLE UPGRADES (this version):
+  3. The "Practice These" widget now correctly routes to a specialized
+     Practice mode in the Review screen, allowing for targeted
+     learning of weak spots (a key Duolingo feature).
 =====================================================================
 */
 
@@ -39,7 +44,7 @@ import com.aiko.lingo.data.model.StatsResponse
 fun DashboardScreen(
     viewModel: DashboardViewModel,
     onBack: () -> Unit,
-    onNavigateToReview: () -> Unit
+    onNavigateToReview: (String) -> Unit
 ) {
     val uiState by viewModel.uiState.collectAsState()
 
@@ -55,7 +60,9 @@ fun DashboardScreen(
             horizontalArrangement = Arrangement.SpaceBetween
         ) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                TextButton(onClick = onBack) { Text("← Back") }
+                IconButton(onClick = onBack) {
+                    Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                }
                 Spacer(modifier = Modifier.width(8.dp))
                 Text("Dashboard", style = MaterialTheme.typography.headlineMedium)
             }
@@ -81,8 +88,6 @@ fun DashboardScreen(
                 )
             }
             is DashboardUiState.Error -> {
-                // FIX: was a dead-end red text label with no way to recover
-                // short of leaving the screen.
                 Column(
                     modifier = Modifier.fillMaxSize(),
                     horizontalAlignment = Alignment.CenterHorizontally,
@@ -103,31 +108,24 @@ fun DashboardScreen(
 private fun DashboardContent(
     stats: StatsResponse,
     wordOfDay: WordOfDayResponse?,
-    onNavigateToReview: () -> Unit,
+    onNavigateToReview: (String) -> Unit,
     onPlayWord: (String, String?) -> Unit
 ) {
     Column(modifier = Modifier.fillMaxSize()) {
-        // Word of the Day -- Duolingo-style daily vocab spotlight with audio.
         wordOfDay?.let { WordOfDayCard(it, onPlayWord) }
 
         Spacer(modifier = Modifier.height(16.dp))
 
-        // XP & Level Card
         XPCard(stats)
 
         Spacer(modifier = Modifier.height(16.dp))
 
-        // Streak Card
         StreakCard(stats)
 
         Spacer(modifier = Modifier.height(16.dp))
 
-        // Stats Grid
         StatsGrid(stats)
 
-        // NEW: Weak vocab widget -- surfaces cards with a high failure rate
-        // so the user can jump straight to their trouble spots instead of
-        // grinding through the full review queue in order.
         if (stats.weak_vocab.isNotEmpty()) {
             Spacer(modifier = Modifier.height(16.dp))
             WeakVocabCard(stats.weak_vocab, onNavigateToReview)
@@ -135,10 +133,9 @@ private fun DashboardContent(
 
         Spacer(modifier = Modifier.height(16.dp))
 
-        // Review Button
         if (stats.cards_due > 0) {
             Button(
-                onClick = onNavigateToReview,
+                onClick = { onNavigateToReview("SRS") },
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(56.dp),
@@ -182,7 +179,7 @@ private fun WordOfDayCard(word: WordOfDayResponse, onPlayWord: (String, String?)
 }
 
 @Composable
-private fun WeakVocabCard(weakVocab: List<ReviewCard>, onNavigateToReview: () -> Unit) {
+private fun WeakVocabCard(weakVocab: List<ReviewCard>, onNavigateToReview: (String) -> Unit) {
     Card(
         modifier = Modifier
             .fillMaxWidth()
@@ -240,8 +237,8 @@ private fun WeakVocabCard(weakVocab: List<ReviewCard>, onNavigateToReview: () ->
                 }
             }
             Spacer(modifier = Modifier.height(12.dp))
-            TextButton(onClick = onNavigateToReview) {
-                Text("Review now →")
+            TextButton(onClick = { onNavigateToReview("PRACTICE") }) {
+                Text("Practice now →")
             }
         }
     }
@@ -257,55 +254,66 @@ private fun XPCard(stats: StatsResponse) {
             containerColor = MaterialTheme.colorScheme.primaryContainer
         )
     ) {
-        Column(modifier = Modifier.padding(20.dp)) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.SpaceBetween
-            ) {
-                Column {
+        Row(
+            modifier = Modifier.padding(20.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            // DUOLINGO UPGRADE: Circular Progress for XP
+            Box(contentAlignment = Alignment.Center) {
+                CircularProgressIndicator(
+                    progress = { progressPercentage },
+                    modifier = Modifier.size(80.dp),
+                    strokeWidth = 8.dp,
+                    color = MaterialTheme.colorScheme.primary,
+                    trackColor = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.1f)
+                )
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
                     Text(
-                        "Level ${stats.level}",
-                        style = MaterialTheme.typography.headlineSmall,
+                        "${stats.level}",
+                        style = MaterialTheme.typography.headlineMedium,
                         fontWeight = FontWeight.Bold
                     )
                     Text(
-                        "${stats.xp} XP",
-                        style = MaterialTheme.typography.labelMedium,
-                        color = MaterialTheme.colorScheme.onPrimaryContainer
-                    )
-                }
-                Box(
-                    modifier = Modifier
-                        .size(60.dp)
-                        .clip(RoundedCornerShape(16.dp))
-                        .background(MaterialTheme.colorScheme.primary),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Text(
-                        "⭐",
-                        fontSize = 32.sp
+                        "LVL",
+                        style = MaterialTheme.typography.labelSmall,
+                        fontSize = 10.sp
                     )
                 }
             }
 
-            Spacer(modifier = Modifier.height(12.dp))
+            Spacer(modifier = Modifier.width(24.dp))
 
-            LinearProgressIndicator(
-                progress = { progressPercentage },
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(8.dp)
-                    .clip(RoundedCornerShape(4.dp))
-            )
-            
-            Spacer(modifier = Modifier.height(8.dp))
-            
-            Text(
-                "XP to next level: ${100 - (stats.xp % 100)}",
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onPrimaryContainer
-            )
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    "Daily Progress",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold
+                )
+                Text(
+                    "${stats.xp} Total XP",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.7f)
+                )
+                
+                Spacer(modifier = Modifier.height(8.dp))
+                
+                LinearProgressIndicator(
+                    progress = { progressPercentage },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(8.dp)
+                        .clip(RoundedCornerShape(4.dp))
+                )
+                
+                Spacer(modifier = Modifier.height(4.dp))
+                
+                Text(
+                    "${100 - (stats.xp % 100)} XP to next level",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.primary,
+                    fontWeight = FontWeight.Bold
+                )
+            }
         }
     }
 }

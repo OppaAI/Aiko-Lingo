@@ -14,9 +14,11 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.activity.enableEdgeToEdge
+import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
+import androidx.navigation.navArgument
 import com.aiko.lingo.data.remote.AikoApiService
 import com.aiko.lingo.ui.conversation.ConversationScreen
 import com.aiko.lingo.ui.conversation.ConversationViewModel
@@ -26,6 +28,7 @@ import com.aiko.lingo.ui.dashboard.DashboardScreen
 import com.aiko.lingo.ui.dashboard.DashboardViewModel
 import com.aiko.lingo.ui.review.ReviewScreen
 import com.aiko.lingo.ui.review.ReviewViewModel
+import com.aiko.lingo.ui.review.ReviewMode
 import com.aiko.lingo.ui.leaderboard.LeaderboardScreen
 import com.aiko.lingo.ui.leaderboard.LeaderboardViewModel
 import com.aiko.lingo.ui.theme.AikoLingoTheme
@@ -82,7 +85,7 @@ private fun AikoLingoApp(apiService: AikoApiService, onToggleTheme: () -> Unit) 
             MainMenu(
                 onNavigateToTranslate = { navController.navigate("translate") },
                 onNavigateToConversation = { navController.navigate("conversation") },
-                onNavigateToReview = { navController.navigate("review") },
+                onNavigateToReview = { navController.navigate("review/SRS") },
                 onNavigateToDashboard = { navController.navigate("dashboard") },
                 onNavigateToLeaderboard = { navController.navigate("leaderboard") },
                 onToggleTheme = onToggleTheme
@@ -101,11 +104,24 @@ private fun AikoLingoApp(apiService: AikoApiService, onToggleTheme: () -> Unit) 
             DashboardScreen(
                 vm,
                 onBack = { navController.popBackStack() },
-                onNavigateToReview = { navController.navigate("review") }
+                onNavigateToReview = { mode -> 
+                    navController.navigate("review/$mode")
+                }
             )
         }
-        composable("review") {
+        composable(
+            route = "review/{mode}",
+            arguments = listOf(navArgument("mode") { type = NavType.StringType })
+        ) { backStackEntry ->
+            val modeStr = backStackEntry.arguments?.getString("mode") ?: "SRS"
+            val mode = if (modeStr == "PRACTICE") ReviewMode.PRACTICE else ReviewMode.SRS
             val vm: ReviewViewModel = viewModel(factory = factory)
+            
+            // Re-initialize VM with the correct mode if it's new
+            LaunchedEffect(mode) {
+                vm.setMode(mode)
+            }
+            
             ReviewScreen(vm, onBack = { navController.popBackStack() })
         }
         composable("leaderboard") {
