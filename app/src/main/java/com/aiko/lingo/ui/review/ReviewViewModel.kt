@@ -25,7 +25,7 @@ BUGFIX PASS (this version, cont. -- audit fix):
 
 DUOLINGO-STYLE UPGRADES (this version):
   4. Added "Targeted Practice" mode. If initialized with mode=PRACTICE,
-     it hits the `api/english/weak-vocab` endpoint to fetch the cards
+     it hits the `api/nihongo/weak-vocab` endpoint to fetch the cards
      the user is failing most often, instead of the SRS due queue.
   5. Added `choices` StateFlow to support Multiple Choice questions,
      a staple Duolingo feature. It automatically generates 3
@@ -187,8 +187,8 @@ class ReviewViewModel(private val apiService: AikoApiService) : ViewModel() {
             val needed = 3 - combinedDistractors.size
             val extraDistractors = FALLBACK_MEANINGS
                 .filter { it != correctCard.meaning && it !in combinedDistractors }
-                .shuffled()
-                .take(needed)
+            .shuffled()
+            .take(needed)
             combinedDistractors = combinedDistractors + extraDistractors
         }
 
