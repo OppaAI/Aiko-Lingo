@@ -2,7 +2,7 @@
 
 **An Android companion app for learning Japanese with Aiko—locally deployed, privacy-first.**
 
-> Aiko-Lingo is a native Kotlin/Jetpack Compose application that connects to your local Aiko-chan AI server over Tailscale, providing interactive Japanese language learning through guided conversation, real-time translation, and adaptive difficulty modes. The app exists as a dedicated frontend precisely because language learning requires a distinct interaction model from general-purpose chat.
+> Aiko-Lingo is a native Kotlin/Jetpack Compose application that connects to your local Aiko-chan AI server over Tailscale, providing interactive Japanese language learning through guided conversation, real-time translation, spaced-repetition vocabulary review, and adaptive difficulty modes. The app exists as a dedicated frontend precisely because language learning requires a distinct interaction model from general-purpose chat.
 
 **Author:** [OppaAI](https://github.com/OppaAI) · Beautiful British Columbia, Canada
 
@@ -18,6 +18,8 @@
 **Backend:**
 ![LLM](https://img.shields.io/badge/Runtime-llama.cpp-967BB6?logo=ai&logoColor=white)
 ![Python](https://img.shields.io/badge/Python-3.12-blue?logo=python&logoColor=white)
+![FastAPI](https://img.shields.io/badge/FastAPI-async-009688?logo=fastapi&logoColor=white)
+![SQLite](https://img.shields.io/badge/SQLite-SM--2%20SRS-003B57?logo=sqlite&logoColor=white)
 ![Ubuntu](https://img.shields.io/badge/Ubuntu-24.04_LTS-orange?logo=ubuntu&logoColor=white)
 ![CUDA](https://img.shields.io/badge/CUDA-12.6-76B900?logo=nvidia)
 
@@ -33,27 +35,35 @@
 
 ## Features
 
-### Current (Kotlin/Jetpack Compose)
-- **Translation Mode** – Translate between English ↔ Japanese with support for:
-  - Formal (敬語) and casual (カジュアル) registers
-  - Contextual phrasing and grammar notes
-- **Conversation Modes** – Guided dialogue with three difficulty levels:
-  - **Beginner** – Simple vocabulary, present tense, frequent hints
-  - **Intermediate** – Everyday conversation, mixed tenses, selective hints
-  - **Advanced** – Nuanced dialogue, cultural context, minimal scaffolding
-- **Presentation Styles**
-  - Typewriter effect for sequential character reveal
-  - Karaoke-mode synchronized highlighting (future)
+### Current (Kotlin/Jetpack Compose + FastAPI backend)
+
+- **Translation Mode** – Translate English → Japanese with support for:
+  - 3–5 registers per request (formal 敬語, casual カジュアル, and points in between), generated in one LLM call
+  - Per-line audio playback via TTS
+- **Conversation Mode** – Guided dialogue with three difficulty levels (beginner / intermediate / advanced):
+  - Streaming replies with a typewriter-style karaoke presentation
+  - Live mistake detection: incorrect turns surface English feedback plus a corrected Japanese suggestion
+  - Contextual hints on demand
+  - A non-streaming `/conversation/respond` endpoint alongside the streaming one, for callers that prefer a single round trip
+- **Spaced Repetition (SRS)** – Vocabulary encountered in conversation is automatically extracted (kanji-cache lookup with an LLM fallback for anything uncommon) and scheduled with a real SM-2 algorithm:
+  - Dedicated review session flow (`Again` / `Hard` / `Good` / `Easy` grading)
+  - A "Practice These" widget surfaces the cards you're actually struggling with (tracked by review failure rate), not just whatever's next in the queue
+  - Vocabulary reviews feed into Aiko's long-term memory as episodic events
+- **Progress Tracking** – Dashboard with XP & levels, day-over-day streaks, total/learned/due card counts, and average ease — all persisted to disk so nothing resets on a server restart. Both conversation turns *and* SRS reviews contribute to XP and streak.
+- **Leaderboard** – Rank, XP, and streak display (currently single-player; see [Roadmap](#development-roadmap))
+- **Toast Notifications** – Server-driven toasts ("Perfect! Let's keep talking.", level-start greetings, "🌟 word = meaning" on an Easy-graded review) surfaced consistently across the Conversation, Translate, and Review screens
+- **Resilience** – Retry affordances on every screen (conversation stream, dashboard stats, review session, translation) instead of dead-end error states; TTS is rate-limited per user with a real `429` response instead of a silent failure
 - **UI Polish**
-  - Light "shoujo" theme (soft pastels, rounded corners)
-  - Dark "purple glass" theme (frosted morphism, high contrast)
-  - Responsive mobile layouts, tested on Firefox Android
+  - Light "Shoujo" theme (soft pastels, rounded corners)
+  - Dark "Lavender Glass" theme (deep purples, high contrast)
+  - Responsive mobile layouts
 
 ### Planned
-- **Speech I/O** – Voice input (via microphone) and audio response (TTS via MioTTS)
-- **Spaced Repetition** – Integration with Aiko's memory system for adaptive vocabulary recall
-- **User Progress Tracking** – Session history, vocabulary mastery scoring, personalized recommendations
+
+- **Voice Input** – Microphone-based speech recognition for spoken practice (TTS *output* is already implemented)
+- **Multiplayer Leaderboard** – Real cross-user ranking; today's `/leaderboard` endpoint only ever returns the requesting user
 - **Offline Mode** – Cached vocabularies and common phrases for low-connectivity scenarios
+- **Session Persistence Across Devices** – Currently all per-user state (streaks, XP, level, SRS cards) lives on the Aiko-chan server keyed by session user ID, which already survives app restarts; a future pass will let it sync across multiple client devices for the same user
 
 ---
 
@@ -78,11 +88,11 @@
    - Let Gradle sync and download dependencies
 
 3. **Configure server connection:**
-   - In `app/src/main/res/values/strings.xml` (or your preferences), set the Aiko-chan server URL:
-     ```xml
-     <string name="aiko_server_url">http://100.x.x.x:8787</string>
+   - The base URL is set in `MainActivity.kt`'s Retrofit builder:
+     ```kotlin
+     .baseUrl("https://aiko.ide-chroma.ts.net/")
      ```
-   - Replace `100.x.x.x` with your Aiko-chan device's Tailscale IP
+   - Point this at your own Aiko-chan device's Tailscale hostname or IP (Tailscale handles TLS termination and auth, so plain `https://<tailscale-hostname>/` is normal here — you don't need your own certificate).
 
 4. **Run:**
    - Select an emulator or physical device
@@ -95,115 +105,157 @@
 ### Client-Side (This App)
 ```
 MainActivity
-├── TranslationScreen
-│   ├── InputField
-│   └── ResultCard (formatted with register + context)
-├── ConversationScreen
-│   ├── DifficultySelector
-│   ├── DialoguePresentation (typewriter / karaoke)
-│   ├── HintButton
-│   └── StopButton
-└── ThemeController (light / dark purple glass)
+├── MainMenu
+├── TranslateScreen        (TranslateViewModel)
+├── ConversationScreen      (ConversationViewModel)
+│   ├── LevelSelection
+│   ├── DialogueBubble / KaraokeBubble (typewriter streaming)
+│   ├── ResponseInput + Hint button
+│   └── Toast overlay (server-driven)
+├── DashboardScreen          (DashboardViewModel)
+│   ├── XP / Streak / Stats cards
+│   ├── "Practice These" weak-vocab widget
+│   └── → ReviewScreen
+├── ReviewScreen              (ReviewViewModel)
+│   ├── SM-2 grading (Again / Hard / Good / Easy)
+│   └── Toast overlay (server-driven)
+└── LeaderboardScreen          (LeaderboardViewModel)
 ```
+
+### Server-Side (Aiko-chan, FastAPI router at `/api/english`)
+```
+interface/webui/lingo/
+├── router.py   — HTTP routing, streaming, audio, streaks/XP/level bookkeeping
+├── srs.py      — SM-2 scheduler over a SQLite-backed vocab table
+├── vocab.py    — Japanese tokenization, kanji lookup (+ LLM fallback), romaji
+└── models.py   — Pydantic request/response schemas
+```
+
+All endpoints authenticate via the caller's session (Tailscale-authenticated), not a client-supplied user ID — this keeps one user's SRS cards, streak, and XP from ever mixing with another's.
 
 ### Server Contract
 
-Aiko-Lingo communicates with Aiko-chan via RESTful JSON endpoints. All requests include optional headers for user context (passed via Tailscale authenticated session).
+All endpoints live under `/api/english` and rely on session auth rather than a request-body user/session identifier. Conversation continuity (the "session") is client-side: the app resends the running dialogue history with each turn rather than the server tracking a `session_id`.
 
-#### Translation
+#### Translate
 ```http
 POST /api/english/translate
 Content-Type: application/json
 
 {
-  "text": "Hello, how are you?",
-  "register": "formal",
-  "context": "greeting"
+  "text": "Hello, how are you?"
 }
 
 Response:
 {
-  "original": "Hello, how are you?",
-  "japanese": "こんにちは、お元気ですか？",
-  "hiragana": "こんにちは、おげんきですか？",
-  "register": "formal",
-  "notes": "敬語; respectful inquiry after wellbeing"
+  "translations": [
+    { "register": "Formal", "text": "こんにちは、お元気ですか？", "audioUrl": null },
+    { "register": "Casual", "text": "元気？", "audioUrl": null }
+  ]
 }
 ```
 
-#### Conversation (Start)
+#### Conversation — Start (streaming, `text/event-stream`)
 ```http
 POST /api/english/conversation/start
 Content-Type: application/json
 
-{
-  "difficulty": "intermediate",
-  "topic": "ordering_food",
-  "language": "english"
-}
+{ "level": "intermediate" }
 
-Response:
-{
-  "session_id": "conv_abc123def456",
-  "opening": "いらっしゃいませ！本日のおすすめは天丼です。",
-  "opening_english": "Welcome! Today's special is tempura rice bowl.",
-  "context": "Restaurant ordering scenario, casual-polite register"
-}
+Stream (newline-delimited JSON):
+{"type": "delta", "text": "いらっしゃ"}
+{"type": "delta", "text": "いませ！"}
+{"type": "final",
+ "isCorrect": true,
+ "japanese": "いらっしゃいませ！本日のおすすめは天丼です。",
+ "english": "Welcome! Today's special is tempura rice bowl.",
+ "isFinished": false,
+ "audioUrl": "https://.../lingo_audio/....wav",
+ "toast": {"type": "info", "message": "Let's practice Japanese at intermediate level! 🔥"}}
 ```
 
-#### Conversation (Respond)
+#### Conversation — Respond (streaming)
 ```http
-POST /api/english/conversation/respond
+POST /api/english/conversation/respond_stream
 Content-Type: application/json
 
 {
-  "session_id": "conv_abc123def456",
-  "user_input": "天丼をください。",
-  "language": "japanese"
+  "text": "天丼をください。",
+  "history": [
+    {"speaker": "aiko", "text": "いらっしゃいませ！本日のおすすめは天丼です。"}
+  ]
 }
 
-Response:
-{
-  "session_id": "conv_abc123def456",
-  "reply": "かしこまりました！こちらです。お召し上がりください。",
-  "reply_english": "Understood! Here you go. Please enjoy.",
-  "feedback": "Good particle usage (を). Natural ordering phrase.",
-  "can_continue": true
-}
+Stream: same delta/final shape as Start, plus "vocabExtracted": <int> and a
+"toast" on the final chunk (e.g. "Perfect! Let's keep talking.").
 ```
 
-#### Hint
+A non-streaming counterpart, `POST /api/english/conversation/respond`, returns the equivalent payload as a single JSON response for callers that don't want SSE.
+
+#### Conversation — Hint
 ```http
 POST /api/english/conversation/hint
-Content-Type: application/json
-
-{
-  "session_id": "conv_abc123def456",
-  "difficulty": "intermediate"
-}
 
 Response:
 {
-  "hint": "You need a sentence particle. Try: [subject] は / が [object] を [verb]",
-  "example": "私は天丼を食べたいです。"
+  "japaneseText": "私は天丼を食べたいです。",
+  "englishTranslation": "I would like the tempura rice bowl.",
+  "audioUrl": "https://.../lingo_audio/....wav",
+  "explanation": "This uses the ~ます form correctly — perfect for this level!"
 }
 ```
 
-#### Stop
+#### Conversation — Stop
 ```http
 POST /api/english/conversation/stop
-Content-Type: application/json
 
-{
-  "session_id": "conv_abc123def456"
-}
+Response: { "success": true }
+```
+
+#### Text-to-Speech
+```http
+GET /api/english/tts?text=こんにちは
+
+Response: { "audioUrl": "https://.../lingo_audio/....wav" }
+```
+Rate-limited per user (20 requests/minute); returns `429` when the limit is hit and `503` only on genuine synthesis failure.
+
+#### SRS Review — Start
+```http
+POST /api/english/conversation/review/start
 
 Response:
 {
-  "summary": "Conversation ended. Vocabulary learned: 5 words. Accuracy: 78%.",
-  "learned_words": ["天丼", "召し上がる", "かしこまりました"],
-  "accuracy_score": 0.78
+  "cards_due": 12,
+  "first_card": {"card_id": 4, "hiragana": "たべる", "meaning": "to eat", "context": "食べたいです。"}
 }
+```
+Returns `400` when nothing is due — the client treats this as "you're caught up," not an error.
+
+#### SRS Review — Respond
+```http
+POST /api/english/conversation/review/respond
+Content-Type: application/json
+
+{ "card_id": 4, "response": "to eat", "grade": 3 }
+
+Response:
+{
+  "updated_card": {"id": 4, "interval": 6, "ease": 2.6},
+  "next_card": {"card_id": 9, "hiragana": "のむ", "meaning": "to drink", "context": ""},
+  "cards_remaining": 11,
+  "toast": {"type": "info", "message": "🌟 のむ = to drink"}
+}
+```
+`grade` is 0–4 (SM-2 scale: Again / Hard / Good / Easy / Perfect). Both correctly and incorrectly graded reviews contribute to the day's streak and XP.
+
+#### Stats / XP / Weak Vocab / Leaderboard
+```http
+GET /api/english/stats
+GET /api/english/weak-vocab
+GET /api/english/xp
+POST /api/english/xp/add        { "amount": 10 }
+GET /api/english/leaderboard
 ```
 
 ---
@@ -212,41 +264,47 @@ Response:
 
 ### Network
 - **Tailscale Integration**: Ensure your Android device is on the same Tailscale network as your Aiko-chan server
-- **Server Port**: Default is `8787` (configurable in Aiko-chan settings)
+- **Server Port**: Default is `8787` (configurable in Aiko-chan settings); the FastAPI router itself is mounted under `/api/english` regardless of port
 - **HTTPS / SSL**: Not required on Tailscale; traffic is encrypted by default
 
 ### Themes
-Toggle between themes via **Settings** → **Appearance**:
+Toggle between themes via the "Switch Theme ✨" button on the main menu:
 - **Light (Shoujo)**: Soft pinks, whites, rounded components
-- **Dark (Purple Glass)**: Deep purples, semi-transparent cards, high contrast
+- **Dark (Lavender Glass)**: Deep purples, semi-transparent cards, high contrast
 
-### Difficulty Tuning
-Customize the conversation difficulty curve via `app/src/main/res/values/config.xml`:
-```xml
-<integer name="beginner_max_sentences">5</integer>
-<integer name="intermediate_max_sentences">10</integer>
-<integer name="advanced_max_sentences">15</integer>
+### Server-Side Persistence
+Per-user state is written to disk under the Aiko-chan working directory so it survives restarts:
+```
+data/streaks/{user_id}.json     # current streak, total sessions, last practiced date
+data/levels/{user_id}.json      # last-used difficulty level
+data/xp/{user_id}.json          # XP total
+interface/webui/lingo/lingo_vocab.db   # SQLite: SRS cards + review history
 ```
 
 ---
 
 ## Development Roadmap
 
-### Phase 1 (Current)
-- [x] v.0.1.0 - Simple prototype
-- [ ] Basic translation endpoint integration
-- [ ] Simple conversation flow (start → respond → stop)
+### Phase 1 (Complete)
+- [x] v0.1.0 – Simple prototype
+- [x] Translation endpoint integration (multi-register)
+- [x] Streaming conversation flow (start → respond → stop) with mistake detection and hints
 
-### Phase 2 (Next)
-- [ ] Real-time speech I/O (microphone input + TTS output)
-- [ ] Hint system with adaptive difficulty
-- [ ] Session persistence (save & resume learning)
+### Phase 2 (Complete)
+- [x] Text-to-speech output, with per-user rate limiting
+- [x] Adaptive hint system
+- [x] Server-side session persistence (streak / XP / difficulty level survive restarts)
+- [x] Retry affordances instead of dead-end error states across all screens
 
-### Phase 3 (Future)
-- [ ] Integration with Aiko-chan's memory system (spaced repetition)
+### Phase 3 (In progress)
+- [x] SM-2 spaced-repetition review flow, backed by SQLite
+- [x] Vocabulary auto-extraction from conversation (kanji cache + LLM fallback) feeding directly into the SRS queue
+- [x] Integration with Aiko-chan's long-term memory (vocab reviews logged as episodic events)
+- [x] Dashboard with XP, streak, due-card count, and a "Practice These" weak-vocab widget
+- [ ] Multiplayer leaderboard (real cross-user ranking, not just the requesting user)
+- [ ] Voice input (microphone → ASR)
 - [ ] Offline vocabulary cache
 - [ ] Companion widget (quick translation from homescreen)
-- [ ] User progress dashboard
 
 ---
 
@@ -284,9 +342,9 @@ Customize the conversation difficulty curve via `app/src/main/res/values/config.
 ## Integration with Aiko-chan
 
 Aiko-Lingo assumes Aiko-chan is running locally with:
-- **FastAPI server** listening on port `8787`
-- **Tailscale** configured for secure remote access
-- **Language modules** installed (Japanese NLP, TTS, ASR stacks)
+- **FastAPI server** exposing the `/api/english` router (this repo's backend counterpart)
+- **Tailscale** configured for secure remote access and session auth
+- **Language modules** installed (Japanese NLP/vocab extraction, TTS synthesis; ASR is not yet required since voice input is still planned)
 
 For setup instructions, see [Aiko-chan README](https://github.com/OppaAI/Aiko-chan#quick-start).
 
@@ -294,7 +352,7 @@ For setup instructions, see [Aiko-chan README](https://github.com/OppaAI/Aiko-ch
 
 ## Philosophy
 
-Aiko-Lingo embodies the same values as Aiko-chan: **privacy-first, locally deployed, and collaborative**. Language learning is a partnership between human and AI—Aiko-Lingo provides the structure; your effort provides the engagement. Every session lives on your device and your Tailscale network. No cloud, no telemetry, no vendor lock-in.
+Aiko-Lingo embodies the same values as Aiko-chan: **privacy-first, locally deployed, and collaborative**. Language learning is a partnership between human and AI—Aiko-Lingo provides the structure; your effort provides the engagement. Every session, every vocabulary card, and every streak lives on your own server and your own Tailscale network. No cloud, no telemetry, no vendor lock-in.
 
 ---
 
