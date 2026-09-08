@@ -17,7 +17,7 @@ BUGFIX PASS (this version, cont. -- audit fix):
 =====================================================================
 */
 
-import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.ContentTransform
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -40,6 +40,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.aiko.lingo.data.model.ReviewCard
 import com.aiko.lingo.ui.conversation.Toast
+import kotlin.time.Duration.Companion.seconds
 import kotlinx.coroutines.delay
 
 @Composable
@@ -82,8 +83,14 @@ fun ReviewScreen(
             Spacer(modifier = Modifier.height(16.dp))
 
             // Progress bar
+            val animatedProgress by animateFloatAsState(
+                targetValue = if (cardsDue + reviewsCompleted > 0)
+                    (reviewsCompleted.toFloat() / (reviewsCompleted + cardsDue))
+                else 0f,
+                label = "review_progress"
+            )
             LinearProgressIndicator(
-                progress = { if (cardsDue > 0) (reviewsCompleted.toFloat() / cardsDue) else 0f },
+                progress = { animatedProgress },
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(6.dp)
@@ -100,7 +107,7 @@ fun ReviewScreen(
                 }
                 ReviewUiState.Reviewing -> {
                     currentCard?.let { card ->
-                        ReviewCardContent(card, viewModel, reviewsCompleted, cardsDue)
+                        ReviewCardContent(card, viewModel)
                     }
                 }
                 is ReviewUiState.Finished -> {
@@ -150,7 +157,7 @@ fun ReviewScreen(
             )
 
             LaunchedEffect(t) {
-                delay(3000)
+                delay(3.seconds)
                 viewModel.dismissToast()
             }
         }
@@ -158,14 +165,12 @@ fun ReviewScreen(
 }
 
 @Composable
-private fun ReviewCardContent(
+private fun ColumnScope.ReviewCardContent(
     card: ReviewCard,
-    viewModel: ReviewViewModel,
-    reviewsCompleted: Int,
-    cardsDue: Int
+    viewModel: ReviewViewModel
 ) {
     var userResponse by remember { mutableStateOf("") }
-    var selectedGrade by remember { mutableStateOf(-1) }
+    var selectedGrade by remember { mutableIntStateOf(-1) }
     var showMeaning by remember { mutableStateOf(false) }
 
     Column(
@@ -233,8 +238,9 @@ private fun ReviewCardContent(
             value = userResponse,
             onValueChange = { userResponse = it },
             modifier = Modifier.fillMaxWidth(),
-            placeholder = { Text("Your response...") },
-            enabled = showMeaning
+            label = { Text("Your response") },
+            placeholder = { Text("Type what you think it means...") },
+            enabled = true
         )
 
         Spacer(modifier = Modifier.height(16.dp))
@@ -249,28 +255,24 @@ private fun ReviewCardContent(
             ) {
                 GradeButton(
                     label = "❌ Again",
-                    grade = 0,
                     isSelected = selectedGrade == 0,
                     onClick = { selectedGrade = 0 },
                     modifier = Modifier.weight(1f)
                 )
                 GradeButton(
                     label = "🤔 Hard",
-                    grade = 1,
                     isSelected = selectedGrade == 1,
                     onClick = { selectedGrade = 1 },
                     modifier = Modifier.weight(1f)
                 )
                 GradeButton(
                     label = "✓ Good",
-                    grade = 2,
                     isSelected = selectedGrade == 2,
                     onClick = { selectedGrade = 2 },
                     modifier = Modifier.weight(1f)
                 )
                 GradeButton(
                     label = "⭐ Easy",
-                    grade = 3,
                     isSelected = selectedGrade == 3,
                     onClick = { selectedGrade = 3 },
                     modifier = Modifier.weight(1f)
@@ -301,7 +303,6 @@ private fun ReviewCardContent(
 @Composable
 private fun GradeButton(
     label: String,
-    grade: Int,
     isSelected: Boolean,
     onClick: () -> Unit,
     modifier: Modifier = Modifier
@@ -314,6 +315,11 @@ private fun GradeButton(
                 MaterialTheme.colorScheme.primary
             } else {
                 MaterialTheme.colorScheme.surfaceVariant
+            },
+            contentColor = if (isSelected) {
+                MaterialTheme.colorScheme.onPrimary
+            } else {
+                MaterialTheme.colorScheme.onSurfaceVariant
             }
         )
     ) {

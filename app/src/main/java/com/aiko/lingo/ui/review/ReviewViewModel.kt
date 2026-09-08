@@ -105,7 +105,7 @@ class ReviewViewModel(private val apiService: AikoApiService) : ViewModel() {
                     ReviewResponseRequest(
                         card_id = cardId,
                         response = response,
-                        grade = grade
+                        grade = grade,
                     )
                 )
                 _reviewsCompleted.value += 1
@@ -126,9 +126,6 @@ class ReviewViewModel(private val apiService: AikoApiService) : ViewModel() {
         }
     }
 
-    fun finishReview() {
-        _uiState.value = ReviewUiState.Finished(_cardsDue.value)
-    }
 }
 
 sealed class ReviewUiState {
