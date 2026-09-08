@@ -12,6 +12,16 @@ BUGFIX PASS (this version, cont. -- audit fix #5):
   2. ReviewResponseData.toast (e.g. "🌟 word = meaning" on an Easy
      grade) was already modeled but never read. It's now surfaced
      through a toastMessage StateFlow so ReviewScreen can display it.
+
+BUGFIX PASS (this version, cont. -- audit fix):
+  3. The backend returns HTTP 400 "No cards due for review" when the
+     queue is empty -- a normal, expected state, not a failure. It was
+     previously caught by the generic `catch (e: Exception)` and shown
+     as a red Error screen with a Retry button that just re-hit the
+     same empty queue and errored again, forever. An HTTP 400 from
+     startReviewSession() is now treated as ReviewUiState.Finished(0),
+     the same "you're all caught up" state a user reaches after
+     clearing their last due card.
 =====================================================================
 */
 
@@ -25,6 +35,7 @@ import com.aiko.lingo.data.remote.AikoApiService
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import retrofit2.HttpException
 
 class ReviewViewModel(private val apiService: AikoApiService) : ViewModel() {
 
@@ -61,6 +72,19 @@ class ReviewViewModel(private val apiService: AikoApiService) : ViewModel() {
                 _currentCard.value = response.first_card
                 _cardsDue.value = response.cards_due
                 _uiState.value = ReviewUiState.Reviewing
+            } catch (e: HttpException) {
+                // FIX #3: an empty due queue (HTTP 400 "No cards due for
+                // review") is a normal "you're caught up" state, not an
+                // error -- route it to Finished instead of a dead-end
+                // Error screen whose Retry button just re-errors forever.
+                if (e.code() == 400) {
+                    _reviewsCompleted.value = 0
+                    _cardsDue.value = 0
+                    _uiState.value = ReviewUiState.Finished(0)
+                } else {
+                    Log.e("Review", "Failed to start review session", e)
+                    _uiState.value = ReviewUiState.Error(e.message() ?: "Failed to start review")
+                }
             } catch (e: Exception) {
                 Log.e("Review", "Failed to start review session", e)
                 _uiState.value = ReviewUiState.Error(e.message ?: "Failed to start review")
