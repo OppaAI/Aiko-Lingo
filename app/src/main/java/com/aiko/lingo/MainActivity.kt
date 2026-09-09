@@ -127,7 +127,14 @@ private fun AikoLingoApp(apiService: AikoApiService, onToggleTheme: () -> Unit) 
             }
             val vm: ReviewViewModel = viewModel(factory = factory)
             LaunchedEffect(mode) { vm.setMode(mode) }
-            ReviewScreen(vm, onBack = { navController.popBackStack() })
+            ReviewScreen(
+                vm,
+                onBack = { navController.popBackStack() },
+                onNavigateToLearn = { navController.navigate("learn") },
+                onNavigateToPractice = {
+                    if (modeStr != "PRACTICE") navController.navigate("review/PRACTICE")
+                }
+            )
         }
         composable("learn") {
             val vm: LearnViewModel = viewModel(factory = factory)
@@ -197,7 +204,7 @@ fun MainMenu(
 
         MenuRow {
             CuteMenuCard(text = "Learn", icon = "🌱", color = PastelGreen, modifier = Modifier.weight(1f), onClick = onNavigateToLearn)
-            CuteMenuCard(text = "Review", icon = "🔁", color = PastelBlue, modifier = Modifier.weight(1f), onClick = onNavigateToReview)
+            CuteMenuCard(text = "Practice", icon = "🎯", color = PastelBlue, modifier = Modifier.weight(1f), onClick = onNavigateToReview)
         }
         Spacer(modifier = Modifier.height(16.dp))
         MenuRow {

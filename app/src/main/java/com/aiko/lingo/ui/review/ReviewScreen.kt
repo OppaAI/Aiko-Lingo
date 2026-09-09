@@ -51,7 +51,9 @@ import kotlinx.coroutines.delay
 @Composable
 fun ReviewScreen(
     viewModel: ReviewViewModel,
-    onBack: () -> Unit
+    onBack: () -> Unit,
+    onNavigateToLearn: () -> Unit = {},
+    onNavigateToPractice: () -> Unit = {}
 ) {
     val uiState by viewModel.uiState.collectAsState()
     val currentCard by viewModel.currentCard.collectAsState()
@@ -132,7 +134,9 @@ fun ReviewScreen(
                         ReviewFinishedScreen(
                             cardsRemaining = state.cardsRemaining,
                             reviewsCompleted = reviewsCompleted,
-                            onBack = onBack
+                            onBack = onBack,
+                            onNavigateToLearn = onNavigateToLearn,
+                            onNavigateToPractice = onNavigateToPractice
                         )
                     }
                     is ReviewUiState.Error -> {
@@ -362,7 +366,9 @@ private fun ColumnScope.ReviewCardContent(
 private fun ReviewFinishedScreen(
     cardsRemaining: Int,
     reviewsCompleted: Int,
-    onBack: () -> Unit
+    onBack: () -> Unit,
+    onNavigateToLearn: () -> Unit,
+    onNavigateToPractice: () -> Unit
 ) {
     Column(
         modifier = Modifier.fillMaxSize(),
@@ -429,15 +435,31 @@ private fun ReviewFinishedScreen(
         Spacer(modifier = Modifier.height(20.dp))
 
         Button(
-            onClick = onBack,
+            onClick = onNavigateToLearn,
             modifier = Modifier
                 .fillMaxWidth(0.85f)
-                .height(56.dp)
+                .height(52.dp)
                 .shadow(8.dp, RoundedCornerShape(28.dp)),
             shape = RoundedCornerShape(28.dp),
             colors = ButtonDefaults.buttonColors(containerColor = PastelGreenDark)
         ) {
-            Text("CONTINUE", fontWeight = FontWeight.ExtraBold, fontSize = 15.sp)
+            Text("Learn new words 🌱", fontWeight = FontWeight.ExtraBold, fontSize = 15.sp)
+        }
+
+        Spacer(modifier = Modifier.height(10.dp))
+
+        OutlinedButton(
+            onClick = onNavigateToPractice,
+            modifier = Modifier
+                .fillMaxWidth(0.85f)
+                .height(52.dp),
+            shape = RoundedCornerShape(28.dp)
+        ) {
+            Text("Practice weak spots 🎯", fontWeight = FontWeight.ExtraBold, fontSize = 15.sp)
+        }
+
+        TextButton(onClick = onBack, modifier = Modifier.padding(top = 4.dp)) {
+            Text("Back to menu", fontWeight = FontWeight.Bold)
         }
     }
 }
