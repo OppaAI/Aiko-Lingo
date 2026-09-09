@@ -1,15 +1,18 @@
 package com.aiko.lingo.ui.translate
 
+import android.media.AudioAttributes
+import android.media.MediaPlayer
+import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.aiko.lingo.data.model.TranslateRequest
 import com.aiko.lingo.data.model.TranslationResult
 import com.aiko.lingo.data.remote.AikoApiService
-import android.media.AudioAttributes
-import android.media.MediaPlayer
+import com.aiko.lingo.data.remote.LingoCache
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import retrofit2.HttpException
 
 class TranslateViewModel(private val apiService: AikoApiService) : ViewModel() {
 
@@ -18,40 +21,69 @@ class TranslateViewModel(private val apiService: AikoApiService) : ViewModel() {
 
     fun translate(text: String) {
         if (text.isBlank()) return
+        val key = text.trim()
 
         viewModelScope.launch {
+            // Repeat translations come from cache instantly (10-min TTL).
+            LingoCache.get<List<TranslationResult>>("tr_$key", 600_000)?.let {
+                _uiState.value = TranslateUiState.Success(it)
+                return@launch
+            }
             val currentState = _uiState.value
             if (currentState is TranslateUiState.Success) {
                 _uiState.value = currentState.copy(isRefreshing = true)
             } else {
                 _uiState.value = TranslateUiState.Loading
             }
-            
-            stopAudio() // Stop any current playback when a new translation starts
+
+            stopAudio()
             try {
-                val response = apiService.translate(TranslateRequest(text))
+                val response = apiService.translate(TranslateRequest(key))
+                LingoCache.put("tr_$key", response.translations)
                 _uiState.value = TranslateUiState.Success(response.translations)
             } catch (e: Exception) {
+                Log.e("Lingo", "Translation error", e)
                 _uiState.value = TranslateUiState.Error(e.message ?: "Unknown error")
             }
         }
     }
 
     private var mediaPlayer: MediaPlayer? = null
-    private var isAudioLoading = MutableStateFlow(false)
+    // Card key currently loading/playing (null when idle), so only the
+    // tapped card's play button spins instead of every card's.
+    private val isAudioLoading = MutableStateFlow<String?>(null)
     val audioLoading = isAudioLoading.asStateFlow()
 
-    fun playAudio(text: String, existingUrl: String? = null) {
+    private val _audioError = MutableStateFlow<String?>(null)
+    val audioError = _audioError.asStateFlow()
+
+    fun dismissAudioError() {
+        _audioError.value = null
+    }
+
+    fun stopAudio() {
+        try {
+            mediaPlayer?.stop()
+            mediaPlayer?.release()
+        } catch (e: Exception) {
+            Log.e("Lingo", "Error stopping audio", e)
+        } finally {
+            mediaPlayer = null
+        }
+    }
+
+    fun playAudio(text: String, existingUrl: String? = null, key: String = text) {
         if (text.isBlank() && existingUrl.isNullOrBlank()) return
 
         stopAudio()
-        
+
         viewModelScope.launch {
+            var currentPlayer: MediaPlayer? = null
             try {
-                isAudioLoading.value = true
+                isAudioLoading.value = key
                 val url = existingUrl ?: apiService.getTts(text).audioUrl
                 
-                mediaPlayer = MediaPlayer().apply {
+                currentPlayer = MediaPlayer().apply {
                     setDataSource(url)
                     setAudioAttributes(
                         AudioAttributes.Builder()
@@ -61,29 +93,50 @@ class TranslateViewModel(private val apiService: AikoApiService) : ViewModel() {
                     )
                     prepareAsync()
                     setOnPreparedListener { 
-                        isAudioLoading.value = false
-                        start() 
+                        try {
+                            isAudioLoading.value = null
+                            start()
+                        } catch (e: Exception) {
+                            Log.e("Lingo", "Failed to start audio playback", e)
+                            isAudioLoading.value = null
+                        }
                     }
                     setOnCompletionListener { 
-                        release()
+                        try {
+                            release()
+                        } catch (e: Exception) {
+                            Log.e("Lingo", "Error releasing media player", e)
+                        }
                         mediaPlayer = null
                     }
+                    setOnErrorListener { mp, what, extra ->
+                        Log.e("Lingo", "MediaPlayer error: what=$what, extra=$extra")
+                        isAudioLoading.value = null
+                        _audioError.value = "Audio playback failed."
+                        try {
+                            mp?.release()
+                        } catch (e: Exception) {
+                            Log.e("Lingo", "Error releasing media player on error", e)
+                        }
+                        mediaPlayer = null
+                        true
+                    }
                 }
+                mediaPlayer = currentPlayer
             } catch (e: Exception) {
-                isAudioLoading.value = false
-                // Log error
+                Log.e("Lingo", "Audio playback error", e)
+                isAudioLoading.value = null
+                _audioError.value = if (e is HttpException && e.code() == 429) {
+                    "Audio rate limit reached. Please wait a moment."
+                } else {
+                    "Couldn't play audio right now."
+                }
+                try {
+                    currentPlayer?.release()
+                } catch (releaseError: Exception) {
+                    Log.e("Lingo", "Error releasing media player on catch", releaseError)
+                }
             }
-        }
-    }
-
-    fun stopAudio() {
-        try {
-            mediaPlayer?.stop()
-            mediaPlayer?.release()
-        } catch (e: Exception) {
-            // Ignore stop errors
-        } finally {
-            mediaPlayer = null
         }
     }
 
@@ -95,7 +148,7 @@ class TranslateViewModel(private val apiService: AikoApiService) : ViewModel() {
 
 sealed class TranslateUiState {
     object Idle : TranslateUiState()
-    object Loading : TranslateUiState() // Initial loading
+    object Loading : TranslateUiState()
     data class Success(
         val translations: List<TranslationResult>,
         val isRefreshing: Boolean = false
