@@ -24,7 +24,6 @@ class TranslateViewModel(private val apiService: AikoApiService) : ViewModel() {
         val key = text.trim()
 
         viewModelScope.launch {
-            // Repeat translations come from cache instantly (10-min TTL).
             LingoCache.get<List<TranslationResult>>("tr_$key", 600_000)?.let {
                 _uiState.value = TranslateUiState.Success(it)
                 return@launch
@@ -49,8 +48,6 @@ class TranslateViewModel(private val apiService: AikoApiService) : ViewModel() {
     }
 
     private var mediaPlayer: MediaPlayer? = null
-    // Card key currently loading/playing (null when idle), so only the
-    // tapped card's play button spins instead of every card's.
     private val isAudioLoading = MutableStateFlow<String?>(null)
     val audioLoading = isAudioLoading.asStateFlow()
 
@@ -82,7 +79,7 @@ class TranslateViewModel(private val apiService: AikoApiService) : ViewModel() {
             try {
                 isAudioLoading.value = key
                 val url = existingUrl ?: apiService.getTts(text).audioUrl
-                
+
                 currentPlayer = MediaPlayer().apply {
                     setDataSource(url)
                     setAudioAttributes(
@@ -92,7 +89,7 @@ class TranslateViewModel(private val apiService: AikoApiService) : ViewModel() {
                             .build()
                     )
                     prepareAsync()
-                    setOnPreparedListener { 
+                    setOnPreparedListener {
                         try {
                             isAudioLoading.value = null
                             start()
@@ -101,13 +98,16 @@ class TranslateViewModel(private val apiService: AikoApiService) : ViewModel() {
                             isAudioLoading.value = null
                         }
                     }
-                    setOnCompletionListener { 
+                    // Only clear mediaPlayer if this callback belongs to the current instance.
+                    setOnCompletionListener { mp ->
                         try {
-                            release()
+                            mp.release()
                         } catch (e: Exception) {
                             Log.e("Lingo", "Error releasing media player", e)
                         }
-                        mediaPlayer = null
+                        if (mediaPlayer === mp) {
+                            mediaPlayer = null
+                        }
                     }
                     setOnErrorListener { mp, what, extra ->
                         Log.e("Lingo", "MediaPlayer error: what=$what, extra=$extra")
@@ -118,7 +118,9 @@ class TranslateViewModel(private val apiService: AikoApiService) : ViewModel() {
                         } catch (e: Exception) {
                             Log.e("Lingo", "Error releasing media player on error", e)
                         }
-                        mediaPlayer = null
+                        if (mediaPlayer === mp) {
+                            mediaPlayer = null
+                        }
                         true
                     }
                 }
@@ -135,6 +137,9 @@ class TranslateViewModel(private val apiService: AikoApiService) : ViewModel() {
                     currentPlayer?.release()
                 } catch (releaseError: Exception) {
                     Log.e("Lingo", "Error releasing media player on catch", releaseError)
+                }
+                if (mediaPlayer === currentPlayer) {
+                    mediaPlayer = null
                 }
             }
         }
