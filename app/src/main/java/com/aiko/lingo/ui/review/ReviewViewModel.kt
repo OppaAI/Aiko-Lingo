@@ -138,11 +138,18 @@ class ReviewViewModel(private val apiService: AikoApiService) : ViewModel() {
                     ReviewMode.SRS -> {
                         Log.d("Review", "Loading SRS cards")
                         val response = apiService.startReviewSession()
-                        Log.d("Review", "SRS session started: ${response.cards_due} cards, first: ${response.first_card.hiragana}")
-                        _currentCard.value = response.first_card
-                        _cardsDue.value = response.cards_due
-                        _uiState.value = ReviewUiState.Reviewing
-                        generateChoices(response.first_card)
+                        val first = response.first_card
+                        if (first == null) {
+                            _reviewsCompleted.value = 0
+                            _cardsDue.value = 0
+                            _uiState.value = ReviewUiState.Finished(0)
+                        } else {
+                            Log.d("Review", "SRS session started: ${response.cards_due} cards, first: ${first.hiragana}")
+                            _currentCard.value = first
+                            _cardsDue.value = response.cards_due
+                            _uiState.value = ReviewUiState.Reviewing
+                            generateChoices(first)
+                        }
                     }
                 }
             } catch (e: HttpException) {

@@ -197,25 +197,21 @@ fun MainMenu(
 
         MenuRow {
             CuteMenuCard(text = "Learn", icon = "🌱", color = PastelGreen, modifier = Modifier.weight(1f), onClick = onNavigateToLearn)
-            Spacer(modifier = Modifier.width(16.dp))
             CuteMenuCard(text = "Review", icon = "🔁", color = PastelBlue, modifier = Modifier.weight(1f), onClick = onNavigateToReview)
         }
         Spacer(modifier = Modifier.height(16.dp))
         MenuRow {
             CuteMenuCard(text = "Courses", icon = "📖", color = PastelPurple, modifier = Modifier.weight(1f), onClick = onNavigateToCourses)
-            Spacer(modifier = Modifier.width(16.dp))
             CuteMenuCard(text = "Grammar", icon = "✏️", color = PastelYellow, modifier = Modifier.weight(1f), onClick = onNavigateToGrammar)
         }
         Spacer(modifier = Modifier.height(16.dp))
         MenuRow {
             CuteMenuCard(text = "Chat", icon = "💬", color = ShoujoPink, modifier = Modifier.weight(1f), onClick = onNavigateToConversation)
-            Spacer(modifier = Modifier.width(16.dp))
             CuteMenuCard(text = "Translate", icon = "🔤", color = PastelOrange, modifier = Modifier.weight(1f), onClick = onNavigateToTranslate)
         }
         Spacer(modifier = Modifier.height(16.dp))
         MenuRow {
             CuteMenuCard(text = "Stats", icon = "📊", color = PastelPurple, modifier = Modifier.weight(1f), onClick = onNavigateToDashboard)
-            Spacer(modifier = Modifier.width(16.dp))
             CuteMenuCard(text = "Ranks", icon = "🏆", color = PastelYellow, modifier = Modifier.weight(1f), onClick = onNavigateToLeaderboard)
         }
 

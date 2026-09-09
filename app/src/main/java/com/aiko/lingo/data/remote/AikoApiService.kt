@@ -135,27 +135,27 @@ data class SetLevelRequest(val level: String)
 
 @Serializable
 data class CourseMeta(
-    val id: String,
-    val title: String,
-    val level: String,
-    val kind: String,
+    val id: String = "",
+    val title: String = "",
+    val level: String = "N5",
+    val kind: String = "",
     val card_count: Int = 0,
     val lesson: Int? = null,
 )
 
 @Serializable
 data class CourseCardDto(
-    val front: String,
-    val back: String,
+    val front: String = "",
+    val back: String = "",
     val reading: String = "",
     val note: String = "",
 )
 
 @Serializable
 data class CourseDetail(
-    val id: String,
-    val title: String,
-    val level: String,
-    val kind: String,
+    val id: String = "",
+    val title: String = "",
+    val level: String = "N5",
+    val kind: String = "",
     val cards: List<CourseCardDto> = emptyList(),
 )

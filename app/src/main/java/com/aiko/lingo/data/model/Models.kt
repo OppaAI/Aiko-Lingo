@@ -69,17 +69,17 @@ data class ConversationHintResponse(
 // ============================================================================
 @Serializable
 data class ReviewCard(
-    val card_id: Int,
-    val hiragana: String,
-    val meaning: String,
-    val context: String,
+    val card_id: Int = 0,
+    val hiragana: String = "",
+    val meaning: String = "",
+    val context: String = "",
     val kanji: String? = null // NEW: optional Kanji field for better readability
 )
 
 @Serializable
 data class ReviewSessionResponse(
-    val cards_due: Int,
-    val first_card: ReviewCard
+    val cards_due: Int = 0,
+    val first_card: ReviewCard? = null
 )
 
 @Serializable
@@ -91,18 +91,18 @@ data class ReviewResponseRequest(
 
 @Serializable
 data class ReviewResponseData(
-    val updated_card: UpdatedCard,
-    val next_card: ReviewCard?,
-    val cards_remaining: Int,
+    val updated_card: UpdatedCard = UpdatedCard(),
+    val next_card: ReviewCard? = null,
+    val cards_remaining: Int = 0,
     // NEW: optional toast from review_respond (e.g. "🌟 word = meaning" on Easy grade)
     val toast: Toast? = null
 )
 
 @Serializable
 data class UpdatedCard(
-    val id: Int,
-    val interval: Int,
-    val ease: Double
+    val id: Int = 0,
+    val interval: Int = 0,
+    val ease: Double = 2.5
 )
 
 // ============================================================================
@@ -128,8 +128,8 @@ data class StatsResponse(
 @Serializable
 data class WordOfDayResponse(
     val card_id: Int = 0,
-    val hiragana: String,
-    val meaning: String,
+    val hiragana: String = "",
+    val meaning: String = "",
     val context: String = "",
     val audioUrl: String? = null,
     val date: String = "",
@@ -138,8 +138,8 @@ data class WordOfDayResponse(
 
 @Serializable
 data class LessonDeckMeta(
-    val id: String,
-    val title: String,
+    val id: String = "",
+    val title: String = "",
     val subtitle: String = "",
     val kind: String = "",
     val card_count: Int = 0
@@ -147,15 +147,15 @@ data class LessonDeckMeta(
 
 @Serializable
 data class LessonCard(
-    val front: String,
-    val back: String,
+    val front: String = "",
+    val back: String = "",
     val reading: String = ""
 )
 
 @Serializable
 data class LessonDeck(
-    val id: String,
-    val title: String,
+    val id: String = "",
+    val title: String = "",
     val subtitle: String = "",
     val kind: String = "",
     val cards: List<LessonCard> = emptyList()
