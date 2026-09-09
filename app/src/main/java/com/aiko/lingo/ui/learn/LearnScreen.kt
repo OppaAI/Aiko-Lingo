@@ -137,6 +137,8 @@ fun LearnScreen(
                             xpEarned = lastXpEarned,
                             currentLevel = currentLevel,
                             nextLevel = viewModel.nextLevel(),
+                            hasProgress = viewModel.hasProgress(),
+                            isComplete = viewModel.isCurrentComplete(),
                             onReload = { viewModel.loadLearnPool() },
                             onMarkLearned = { viewModel.markLearned(it) },
                             onLevelUp = { viewModel.setLevel(it) },
@@ -161,11 +163,11 @@ fun LearnScreen(
                             Row(
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .padding(20.dp),
+                                    .padding(14.dp),
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
                                 Column(modifier = Modifier.weight(1f)) {
-                                    Text(deck.title, fontSize = 20.sp, fontWeight = FontWeight.Bold)
+                                    Text(deck.title, fontSize = 16.sp, fontWeight = FontWeight.Bold)
                                     Text(deck.subtitle, fontSize = 14.sp)
                                     Text(
                                         "${deck.card_count} cards",
@@ -196,7 +198,7 @@ private fun LevelProgressionCard(
     Card(shape = RoundedCornerShape(20.dp), modifier = Modifier.fillMaxWidth()) {
         Column(Modifier.padding(16.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Text("JLPT Track · start N5 🌱", fontWeight = FontWeight.Bold, fontSize = 18.sp, modifier = Modifier.weight(1f))
+                Text("JLPT Track · start N5 🌱", fontWeight = FontWeight.Bold, fontSize = 15.sp, modifier = Modifier.weight(1f))
                 if (loading) CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
             }
             Spacer(Modifier.height(8.dp))
@@ -244,6 +246,8 @@ private fun LearnPoolCard(
     xpEarned: Int?,
     currentLevel: String,
     nextLevel: String?,
+    hasProgress: Boolean,
+    isComplete: Boolean,
     onReload: () -> Unit,
     onMarkLearned: (List<com.aiko.lingo.data.remote.LearnItemDto>) -> Unit,
     onLevelUp: (String) -> Unit,
@@ -252,7 +256,7 @@ private fun LearnPoolCard(
     Card(shape = RoundedCornerShape(20.dp), modifier = Modifier.fillMaxWidth()) {
         Column(Modifier.padding(16.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Text("New vocab · $currentLevel", fontWeight = FontWeight.Bold, fontSize = 18.sp, modifier = Modifier.weight(1f))
+                Text("New vocab · $currentLevel", fontWeight = FontWeight.Bold, fontSize = 15.sp, modifier = Modifier.weight(1f))
                 if (loading) CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
             }
             if (xpEarned != null) {
@@ -273,13 +277,20 @@ private fun LearnPoolCard(
                 }
                 pool == null || pool.items.isEmpty() -> {
                     if ((pool?.pending_in_pool ?: 0) == 0) {
-                        Text("All caught up at $currentLevel! ✨", fontWeight = FontWeight.Bold)
-                        if (nextLevel != null) {
-                            Text("Earn $nextLevel by leveling up:", fontSize = 13.sp)
-                            Spacer(Modifier.height(8.dp))
-                            Button(onClick = { onLevelUp(nextLevel) }) { Text("Level up → $nextLevel") }
+                        if (isComplete && hasProgress) {
+                            Text("All caught up at $currentLevel! ✨", fontWeight = FontWeight.Bold)
+                            if (nextLevel != null) {
+                                Text("Earn $nextLevel by leveling up:", fontSize = 13.sp)
+                                Spacer(Modifier.height(8.dp))
+                                Button(onClick = { onLevelUp(nextLevel) }) { Text("Level up → $nextLevel") }
+                            } else {
+                                Text("You reached N1 — top rank! 🏆", fontSize = 13.sp)
+                            }
                         } else {
-                            Text("You reached N1 — top rank! 🏆", fontSize = 13.sp)
+                            // Pool warming / backend still spawning — NOT completion.
+                            Text("Preparing $currentLevel words… ⏳", fontWeight = FontWeight.Bold)
+                            Text("No waiting on LLM — pool refills in background. Tap reload.", fontSize = 13.sp)
+                            Button(onClick = onReload, modifier = Modifier.padding(top = 8.dp), enabled = !loading) { Text("Reload") }
                         }
                     } else {
                         Text("${pool?.pending_in_pool ?: 0} cards pending — tap reload.", fontSize = 13.sp)
@@ -291,7 +302,7 @@ private fun LearnPoolCard(
                     Spacer(Modifier.height(8.dp))
                     pool.items.take(5).forEach { item ->
                         Column(Modifier.padding(vertical = 6.dp)) {
-                            Text(item.front, fontWeight = FontWeight.Bold, fontSize = 20.sp)
+                            Text(item.front, fontWeight = FontWeight.Bold, fontSize = 16.sp)
                             if (item.reading.isNotBlank() && item.reading != item.front) {
                                 Text(item.reading, fontSize = 13.sp)
                             }

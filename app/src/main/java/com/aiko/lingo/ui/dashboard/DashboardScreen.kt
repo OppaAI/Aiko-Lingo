@@ -89,6 +89,7 @@ fun DashboardScreen(
                         DashboardContent(
                             stats = state.stats,
                             wordOfDay = state.wordOfDay,
+                            jlptLevel = state.jlptLevel,
                             onNavigateToReview = onNavigateToReview,
                             onPlayWord = { text, url -> viewModel.playWord(text, url) }
                         )
@@ -121,37 +122,83 @@ fun DashboardScreen(
 private fun DashboardContent(
     stats: StatsResponse,
     wordOfDay: WordOfDayResponse?,
+    jlptLevel: String,
     onNavigateToReview: (String) -> Unit,
     onPlayWord: (String, String?) -> Unit
 ) {
     Column(modifier = Modifier.fillMaxSize()) {
+        JlptLevelBadge(jlptLevel)
+
+        Spacer(modifier = Modifier.height(12.dp))
+
         wordOfDay?.let { WordOfDayCard(it, onPlayWord) }
 
-        Spacer(modifier = Modifier.height(24.dp))
+        Spacer(modifier = Modifier.height(16.dp))
 
         XPCard(stats)
 
-        Spacer(modifier = Modifier.height(24.dp))
+        Spacer(modifier = Modifier.height(16.dp))
 
         StreakCard(stats)
 
-        Spacer(modifier = Modifier.height(32.dp))
+        Spacer(modifier = Modifier.height(20.dp))
 
         Text(
             "Learning Progress 🌸",
             style = MaterialTheme.typography.titleLarge,
             fontWeight = FontWeight.ExtraBold,
             color = ShoujoText,
-            modifier = Modifier.padding(bottom = 16.dp)
+            modifier = Modifier.padding(bottom = 12.dp)
         )
 
         StatsGrid(stats)
 
         if (stats.weak_vocab.isNotEmpty()) {
-            Spacer(modifier = Modifier.height(32.dp))
+            Spacer(modifier = Modifier.height(20.dp))
             WeakVocabCard(stats.weak_vocab, onNavigateToReview)
         }
 
+    }
+}
+
+@Composable
+private fun JlptLevelBadge(level: String) {
+    val label = level.ifBlank { "N5" }
+    Card(
+        modifier = Modifier.fillMaxWidth().shadow(4.dp, RoundedCornerShape(32.dp)),
+        shape = RoundedCornerShape(32.dp),
+        colors = CardDefaults.cardColors(containerColor = PastelPurple)
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 20.dp, vertical = 14.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text("🎌", fontSize = 24.sp)
+            Spacer(modifier = Modifier.width(12.dp))
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    "JLPT Level",
+                    style = MaterialTheme.typography.labelSmall,
+                    fontWeight = FontWeight.Bold,
+                    color = ShoujoText.copy(alpha = 0.6f)
+                )
+                Text(
+                    label,
+                    style = MaterialTheme.typography.titleLarge,
+                    fontWeight = FontWeight.ExtraBold,
+                    color = ShoujoText
+                )
+            }
+            Surface(color = PastelPurpleDark.copy(alpha = 0.25f), shape = RoundedCornerShape(12.dp)) {
+                Text(
+                    "N5 start 🌱",
+                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
+                    style = MaterialTheme.typography.labelSmall,
+                    fontWeight = FontWeight.Bold,
+                    color = ShoujoText
+                )
+            }
+        }
     }
 }
 
@@ -165,7 +212,7 @@ private fun WordOfDayCard(word: WordOfDayResponse, onPlayWord: (String, String?)
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(24.dp),
+                .padding(16.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
             Column(modifier = Modifier.weight(1f)) {
@@ -181,30 +228,30 @@ private fun WordOfDayCard(word: WordOfDayResponse, onPlayWord: (String, String?)
                         color = Color(0xFF6D4C41)
                     )
                 }
-                Spacer(modifier = Modifier.height(12.dp))
+                Spacer(modifier = Modifier.height(8.dp))
                 Text(
                     text = word.kanji ?: word.hiragana,
-                    fontSize = 36.sp,
+                    fontSize = 28.sp,
                     fontWeight = FontWeight.ExtraBold,
                     color = ShoujoText
                 )
                 if (word.kanji != null) {
                     Text(
                         text = word.hiragana,
-                        fontSize = 16.sp,
+                        fontSize = 13.sp,
                         color = ShoujoText.copy(alpha = 0.6f)
                     )
                 }
-                Text(word.meaning, fontSize = 20.sp, color = ShoujoText.copy(alpha = 0.8f))
+                Text(word.meaning, fontSize = 16.sp, color = ShoujoText.copy(alpha = 0.8f))
             }
             IconButton(
                 onClick = { onPlayWord(word.hiragana, word.audioUrl) },
                 modifier = Modifier
-                    .size(64.dp)
+                    .size(52.dp)
                     .background(Color.White, RoundedCornerShape(32.dp))
                     .shadow(2.dp, RoundedCornerShape(32.dp))
             ) {
-                Icon(Icons.Default.PlayArrow, contentDescription = "Play", tint = PastelYellowDark, modifier = Modifier.size(36.dp))
+                Icon(Icons.Default.PlayArrow, contentDescription = "Play", tint = PastelYellowDark, modifier = Modifier.size(28.dp))
             }
         }
     }
@@ -217,10 +264,10 @@ private fun WeakVocabCard(weakVocab: List<ReviewCard>, onNavigateToReview: (Stri
         shape = RoundedCornerShape(32.dp),
         colors = CardDefaults.cardColors(containerColor = Color(0xFFFFEBEE))
     ) {
-        Column(modifier = Modifier.padding(24.dp)) {
+        Column(modifier = Modifier.padding(16.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Text("🎯", fontSize = 28.sp)
-                Spacer(modifier = Modifier.width(12.dp))
+                Text("🎯", fontSize = 22.sp)
+                Spacer(modifier = Modifier.width(8.dp))
                 Text(
                     "Tricky Words",
                     style = MaterialTheme.typography.titleLarge,
@@ -275,14 +322,14 @@ private fun XPCard(stats: StatsResponse) {
         colors = CardDefaults.cardColors(containerColor = PastelBlue)
     ) {
         Row(
-            modifier = Modifier.padding(24.dp),
+            modifier = Modifier.padding(16.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
             Box(contentAlignment = Alignment.Center) {
                 CircularProgressIndicator(
                     progress = { progressPercentage },
-                    modifier = Modifier.size(90.dp),
-                    strokeWidth = 12.dp,
+                    modifier = Modifier.size(72.dp),
+                    strokeWidth = 10.dp,
                     color = PastelBlueDark,
                     trackColor = Color.White.copy(alpha = 0.5f)
                 )
@@ -343,11 +390,11 @@ private fun StreakCard(stats: StatsResponse) {
         colors = CardDefaults.cardColors(containerColor = PastelOrange)
     ) {
         Row(
-            modifier = Modifier.padding(24.dp),
+            modifier = Modifier.padding(16.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Text("🔥", fontSize = 56.sp)
-            Spacer(modifier = Modifier.width(20.dp))
+            Text("🔥", fontSize = 40.sp)
+            Spacer(modifier = Modifier.width(16.dp))
             Column {
                 Text(
                     "${stats.streak.days} Day Streak!",
@@ -388,10 +435,10 @@ private fun StatBox(icon: String, label: String, value: String, color: Color, mo
         color = color
     ) {
         Column(
-            modifier = Modifier.padding(20.dp),
+            modifier = Modifier.padding(12.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            Text(icon, fontSize = 32.sp)
+            Text(icon, fontSize = 24.sp)
             Text(label, style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold, color = ShoujoText.copy(alpha = 0.5f))
             Text(value, style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.ExtraBold, color = ShoujoText)
         }

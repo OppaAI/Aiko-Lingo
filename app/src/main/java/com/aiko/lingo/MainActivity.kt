@@ -164,7 +164,7 @@ fun MainMenu(
         modifier = Modifier
             .fillMaxSize()
             .verticalScroll(rememberScrollState())
-            .padding(24.dp),
+            .padding(16.dp),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
         Spacer(modifier = Modifier.height(48.dp))
@@ -177,7 +177,7 @@ fun MainMenu(
             Image(
                 painter = painterResource(R.drawable.aiko_square),
                 contentDescription = "Aiko",
-                modifier = Modifier.size(160.dp),
+                modifier = Modifier.size(120.dp),
                 contentScale = ContentScale.Crop
             )
         }
@@ -241,7 +241,7 @@ fun CuteMenuCard(
 ) {
     Card(
         onClick = onClick,
-        modifier = modifier.height(110.dp),
+        modifier = modifier.height(92.dp),
         shape = RoundedCornerShape(28.dp),
         colors = CardDefaults.cardColors(containerColor = color),
         elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
@@ -251,9 +251,9 @@ fun CuteMenuCard(
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.Center
         ) {
-            Text(icon, fontSize = 32.sp)
+            Text(icon, fontSize = 26.sp)
             Spacer(modifier = Modifier.height(4.dp))
-            Text(text = text, fontSize = 18.sp, fontWeight = FontWeight.ExtraBold, color = ShoujoText)
+            Text(text = text, fontSize = 15.sp, fontWeight = FontWeight.ExtraBold, color = ShoujoText)
         }
     }
 }

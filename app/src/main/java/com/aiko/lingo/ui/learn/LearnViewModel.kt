@@ -151,8 +151,16 @@ class LearnViewModel(private val apiService: AikoApiService) : ViewModel() {
         }
     }
 
-    /** N5 is lowest/start. True when current pool fully learned. */
+    /** N5 is lowest/start. True only with real progress + empty pool. */
+    fun hasProgress(): Boolean {
+        val s = _learnStatus.value ?: return false
+        return s.user_cards > 0 || s.learned_today > 0 || s.reviews_today > 0
+    }
+
     fun isCurrentComplete(): Boolean {
+        // Empty pool alone is NOT completion (backend may still be warming).
+        // Require evidence the user actually learned something first.
+        if (!hasProgress()) return false
         val pool = _learnPool.value
         if (pool != null) {
             return pool.items.isEmpty() && pool.pending_in_pool == 0

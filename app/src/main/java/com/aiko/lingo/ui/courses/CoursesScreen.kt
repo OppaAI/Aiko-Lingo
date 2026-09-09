@@ -129,14 +129,14 @@ fun CoursesScreen(vm: CoursesViewModel, title: String, onBack: () -> Unit) {
                     }
                     Spacer(Modifier.height(8.dp))
                 }
-                Text(d.title, fontWeight = FontWeight.Bold, fontSize = 20.sp)
+                Text(d.title, fontWeight = FontWeight.Bold, fontSize = 16.sp)
                 Text("${d.level} · ${d.cards.size} cards", color = MaterialTheme.colorScheme.primary)
                 Spacer(Modifier.height(12.dp))
                 LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     items(d.cards) { c ->
                         Card(shape = RoundedCornerShape(16.dp), modifier = Modifier.fillMaxWidth()) {
                             Column(Modifier.padding(16.dp)) {
-                                Text(c.front, fontSize = 22.sp, fontWeight = FontWeight.Bold)
+                                Text(c.front, fontSize = 17.sp, fontWeight = FontWeight.Bold)
                                 if (c.reading.isNotBlank()) Text(c.reading, fontSize = 14.sp)
                                 Text(c.back, fontSize = 16.sp)
                                 if (c.note.isNotBlank()) Text(c.note, fontSize = 12.sp, color = MaterialTheme.colorScheme.secondary)
@@ -156,14 +156,25 @@ fun CoursesScreen(vm: CoursesViewModel, title: String, onBack: () -> Unit) {
                     OutlinedButton(onClick = { vm.backToList() }) { Text("Back to list") }
                 }
             }
+            !listLoading && list.isEmpty() && detail == null -> Column(
+                Modifier.fillMaxSize(),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.Center
+            ) {
+                Text("📚", fontSize = 40.sp)
+                Spacer(Modifier.height(8.dp))
+                Text("No decks yet — check back soon!", textAlign = TextAlign.Center)
+                Spacer(Modifier.height(8.dp))
+                Button(onClick = { vm.reload() }) { Text("Reload") }
+            }
             else -> LazyColumn(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 items(list, key = { it.id }) { deck ->
                     Card(
                         modifier = Modifier.fillMaxWidth().clickable { vm.open(deck.id) },
                         shape = RoundedCornerShape(16.dp)
                     ) {
-                        Column(Modifier.padding(20.dp)) {
-                            Text(deck.title, fontSize = 18.sp, fontWeight = FontWeight.Bold)
+                        Column(Modifier.padding(14.dp)) {
+                            Text(deck.title, fontSize = 15.sp, fontWeight = FontWeight.Bold)
                             Text("${deck.level} · ${deck.card_count} cards", fontSize = 13.sp)
                         }
                     }

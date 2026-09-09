@@ -27,15 +27,24 @@ class DashboardViewModel(private val apiService: AikoApiService) : ViewModel() {
             _uiState.value = DashboardUiState.Loading
             try {
                 val stats = apiService.getStats()
-                // Word of the Day is best-effort -- a failure here must not
-                // take down the whole dashboard.
-                val wordOfDay = try {
-                    apiService.getWordOfDay()
+                // JLPT track is best-effort -- never block stats on it.
+                val jlptLevel = try {
+                    apiService.getLearnStatus().level.ifBlank { stats.last_level }
                 } catch (e: Exception) {
-                    Log.w("Dashboard", "Word of the day unavailable", e)
-                    null
+                    Log.w("Dashboard", "JLPT level unavailable", e)
+                    stats.last_level
                 }
-                _uiState.value = DashboardUiState.Success(stats, wordOfDay)
+                // Emit stats immediately so the spinner stops; word-of-day
+                // (LLM-backed, can take ~60s for new users) loads after.
+                _uiState.value = DashboardUiState.Success(stats, null, jlptLevel)
+                viewModelScope.launch {
+                    try {
+                        val wordOfDay = apiService.getWordOfDay()
+                        _uiState.value = DashboardUiState.Success(stats, wordOfDay, jlptLevel)
+                    } catch (e: Exception) {
+                        Log.w("Dashboard", "Word of the day unavailable", e)
+                    }
+                }
             } catch (e: Exception) {
                 Log.e("Dashboard", "Failed to fetch stats", e)
                 _uiState.value = DashboardUiState.Error(e.message ?: "Failed to load stats")
@@ -106,6 +115,6 @@ class DashboardViewModel(private val apiService: AikoApiService) : ViewModel() {
 
 sealed class DashboardUiState {
     object Loading : DashboardUiState()
-    data class Success(val stats: StatsResponse, val wordOfDay: WordOfDayResponse? = null) : DashboardUiState()
+    data class Success(val stats: StatsResponse, val wordOfDay: WordOfDayResponse? = null, val jlptLevel: String = "") : DashboardUiState()
     data class Error(val message: String) : DashboardUiState()
 }

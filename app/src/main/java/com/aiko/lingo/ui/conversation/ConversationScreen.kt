@@ -163,7 +163,7 @@ fun ConversationScreen(
 @Composable
 fun StartConversationView(onStart: (String) -> Unit) {
     Column(
-        modifier = Modifier.fillMaxSize().padding(24.dp),
+        modifier = Modifier.fillMaxSize().padding(16.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center
     ) {
@@ -189,7 +189,7 @@ fun LevelButton(title: String, desc: String, color: Color, onClick: () -> Unit) 
             verticalArrangement = Arrangement.Center,
             horizontalAlignment = Alignment.Start
         ) {
-            Text(title, fontWeight = FontWeight.ExtraBold, fontSize = 22.sp, color = ShoujoText)
+            Text(title, fontWeight = FontWeight.ExtraBold, fontSize = 17.sp, color = ShoujoText)
             Text(desc, fontSize = 14.sp, color = ShoujoText.copy(alpha = 0.6f))
         }
     }
@@ -216,7 +216,7 @@ fun ChatBubble(entry: DialogueEntry) {
             modifier = Modifier.widthIn(max = 320.dp).shadow(2.dp, RoundedCornerShape(32.dp)),
             border = if (isAiko) BorderStroke(1.dp, ShoujoPink) else null
         ) {
-            Column(modifier = Modifier.padding(20.dp)) {
+            Column(modifier = Modifier.padding(14.dp)) {
                 Text(
                     text = entry.japanese,
                     style = MaterialTheme.typography.bodyLarge,
@@ -248,7 +248,7 @@ fun MessageInput(viewModel: ConversationViewModel, isEnabled: Boolean) {
         shape = RoundedCornerShape(topStart = 32.dp, topEnd = 32.dp)
     ) {
         Row(
-            modifier = Modifier.padding(20.dp).safeDrawingPadding(),
+            modifier = Modifier.padding(14.dp).safeDrawingPadding(),
             verticalAlignment = Alignment.CenterVertically
         ) {
             IconButton(
@@ -324,7 +324,7 @@ fun KaraokeView(text: String) {
         Text(
             text = text,
             color = Color.White,
-            modifier = Modifier.padding(20.dp),
+            modifier = Modifier.padding(14.dp),
             textAlign = TextAlign.Center,
             style = MaterialTheme.typography.titleMedium,
             fontWeight = FontWeight.ExtraBold

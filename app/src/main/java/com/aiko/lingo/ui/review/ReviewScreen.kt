@@ -319,7 +319,7 @@ private fun ColumnScope.ReviewCardContent(
                 color = if (selectedChoice == card.meaning) PastelGreen.copy(alpha = 0.8f) else Color(0xFFFFEBEE),
                 shape = RoundedCornerShape(topStart = 32.dp, topEnd = 32.dp)
             ) {
-                Column(modifier = Modifier.padding(24.dp)) {
+                Column(modifier = Modifier.padding(16.dp)) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Text(
                             if (selectedChoice == card.meaning) "🎉 AMAZING!" else "KEEP TRYING!",
@@ -350,7 +350,7 @@ private fun ColumnScope.ReviewCardContent(
                         ),
                         elevation = ButtonDefaults.buttonElevation(defaultElevation = 4.dp)
                     ) {
-                        Text("CONTINUE", fontWeight = FontWeight.ExtraBold, fontSize = 20.sp)
+                        Text("CONTINUE", fontWeight = FontWeight.ExtraBold, fontSize = 15.sp)
                     }
                 }
             }
@@ -369,7 +369,7 @@ private fun ReviewFinishedScreen(
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center
     ) {
-        Text("🥳", fontSize = 72.sp)
+        Text("🥳", fontSize = 52.sp)
 
         Spacer(modifier = Modifier.height(12.dp))
 
@@ -437,7 +437,7 @@ private fun ReviewFinishedScreen(
             shape = RoundedCornerShape(28.dp),
             colors = ButtonDefaults.buttonColors(containerColor = PastelGreenDark)
         ) {
-            Text("CONTINUE", fontWeight = FontWeight.ExtraBold, fontSize = 18.sp)
+            Text("CONTINUE", fontWeight = FontWeight.ExtraBold, fontSize = 15.sp)
         }
     }
 }
