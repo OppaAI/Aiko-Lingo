@@ -29,7 +29,7 @@
 
 > **Click the thumbnail below to watch on YouTube** ▶
 
-[![Aiko-Lingo Demo](https://img.youtube.com/vi/xRtCmtZQgwI/maxresdefault.jpg)](https://www.youtube.com/watch?v=xRtCmtZQgwI)
+[![Aiko-Lingo Demo](https://img.youtube.com/vi/65BfSeToR-Y/maxresdefault.jpg)](https://www.youtube.com/watch?v=65BfSeToR-Y)
 
 ---
 
