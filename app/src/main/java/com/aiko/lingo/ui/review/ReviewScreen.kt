@@ -37,7 +37,6 @@ import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalHapticFeedback
-import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -236,16 +235,6 @@ private fun ColumnScope.ReviewCardContent(
                         text = card.hiragana,
                         style = MaterialTheme.typography.titleMedium,
                         color = Color.Gray
-                    )
-                }
-                if (card.context.isNotEmpty()) {
-                    Spacer(modifier = Modifier.height(16.dp))
-                    Text(
-                        card.context,
-                        style = MaterialTheme.typography.bodyLarge,
-                        color = Color.Gray,
-                        fontStyle = FontStyle.Italic,
-                        textAlign = TextAlign.Center
                     )
                 }
             }

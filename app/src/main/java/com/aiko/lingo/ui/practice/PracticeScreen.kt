@@ -144,15 +144,6 @@ private fun PracticeQuestion(viewModel: PracticeViewModel) {
                     color = ShoujoText,
                     textAlign = TextAlign.Center
                 )
-                if (card.context.isNotBlank()) {
-                    Spacer(modifier = Modifier.height(8.dp))
-                    Text(
-                        card.context,
-                        fontSize = 13.sp,
-                        color = ShoujoText.copy(alpha = 0.6f),
-                        textAlign = TextAlign.Center
-                    )
-                }
                 Spacer(modifier = Modifier.height(12.dp))
                 Button(
                     onClick = { viewModel.playCurrent() },
