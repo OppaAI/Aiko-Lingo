@@ -1,7 +1,6 @@
 package com.aiko.lingo
 
 import android.os.Bundle
-import android.util.Log
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.Image
@@ -40,6 +39,8 @@ import com.aiko.lingo.ui.leaderboard.LeaderboardScreen
 import com.aiko.lingo.ui.leaderboard.LeaderboardViewModel
 import com.aiko.lingo.ui.learn.LearnScreen
 import com.aiko.lingo.ui.learn.LearnViewModel
+import com.aiko.lingo.ui.courses.CoursesScreen
+import com.aiko.lingo.ui.courses.CoursesViewModel
 import com.aiko.lingo.ui.theme.*
 import retrofit2.converter.kotlinx.serialization.asConverterFactory
 import kotlinx.serialization.json.Json
@@ -49,7 +50,7 @@ import retrofit2.Retrofit
 import java.util.concurrent.TimeUnit
 
 class MainActivity : ComponentActivity() {
-    
+
     private val json = Json { ignoreUnknownKeys = true }
     private val apiService by lazy {
         val okHttpClient = OkHttpClient.Builder()
@@ -71,12 +72,8 @@ class MainActivity : ComponentActivity() {
         enableEdgeToEdge()
         setContent {
             var darkTheme by remember { mutableStateOf(false) }
-            
             AikoLingoTheme(darkTheme = darkTheme) {
-                Surface(
-                    modifier = Modifier.fillMaxSize(),
-                    color = MaterialTheme.colorScheme.background
-                ) {
+                Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
                     AikoLingoApp(apiService, onToggleTheme = { darkTheme = !darkTheme })
                 }
             }
@@ -96,6 +93,8 @@ private fun AikoLingoApp(apiService: AikoApiService, onToggleTheme: () -> Unit) 
                 onNavigateToConversation = { navController.navigate("conversation") },
                 onNavigateToReview = { navController.navigate("review/SRS") },
                 onNavigateToLearn = { navController.navigate("learn") },
+                onNavigateToCourses = { navController.navigate("courses") },
+                onNavigateToGrammar = { navController.navigate("grammar") },
                 onNavigateToDashboard = { navController.navigate("dashboard") },
                 onNavigateToLeaderboard = { navController.navigate("leaderboard") },
                 onToggleTheme = onToggleTheme
@@ -114,9 +113,7 @@ private fun AikoLingoApp(apiService: AikoApiService, onToggleTheme: () -> Unit) 
             DashboardScreen(
                 vm,
                 onBack = { navController.popBackStack() },
-                onNavigateToReview = { mode -> 
-                    navController.navigate("review/$mode")
-                }
+                onNavigateToReview = { mode -> navController.navigate("review/$mode") }
             )
         }
         composable(
@@ -124,22 +121,25 @@ private fun AikoLingoApp(apiService: AikoApiService, onToggleTheme: () -> Unit) 
             arguments = listOf(navArgument("mode") { type = NavType.StringType })
         ) { backStackEntry ->
             val modeStr = backStackEntry.arguments?.getString("mode") ?: "SRS"
-            // LEARN is not a review mode — new vocab lives under Learn screen.
-            val mode = when(modeStr) {
+            val mode = when (modeStr) {
                 "PRACTICE" -> ReviewMode.PRACTICE
                 else -> ReviewMode.SRS
             }
             val vm: ReviewViewModel = viewModel(factory = factory)
-            
-            LaunchedEffect(mode) {
-                vm.setMode(mode)
-            }
-            
+            LaunchedEffect(mode) { vm.setMode(mode) }
             ReviewScreen(vm, onBack = { navController.popBackStack() })
         }
         composable("learn") {
             val vm: LearnViewModel = viewModel(factory = factory)
             LearnScreen(vm, onBack = { navController.popBackStack() })
+        }
+        composable("courses") {
+            val vm: CoursesViewModel = viewModel(factory = ViewModelFactory(apiService, "courses"))
+            CoursesScreen(vm, title = "Courses 📖", onBack = { navController.popBackStack() })
+        }
+        composable("grammar") {
+            val vm: CoursesViewModel = viewModel(factory = ViewModelFactory(apiService, "grammar"))
+            CoursesScreen(vm, title = "Grammar ✏️", onBack = { navController.popBackStack() })
         }
         composable("leaderboard") {
             val vm: LeaderboardViewModel = viewModel(factory = factory)
@@ -154,6 +154,8 @@ fun MainMenu(
     onNavigateToConversation: () -> Unit,
     onNavigateToReview: () -> Unit,
     onNavigateToLearn: () -> Unit,
+    onNavigateToCourses: () -> Unit,
+    onNavigateToGrammar: () -> Unit,
     onNavigateToDashboard: () -> Unit,
     onNavigateToLeaderboard: () -> Unit,
     onToggleTheme: () -> Unit
@@ -166,7 +168,7 @@ fun MainMenu(
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
         Spacer(modifier = Modifier.height(48.dp))
-        
+
         Card(
             shape = RoundedCornerShape(40.dp),
             elevation = CardDefaults.cardElevation(defaultElevation = 12.dp),
@@ -179,7 +181,7 @@ fun MainMenu(
                 contentScale = ContentScale.Crop
             )
         }
-        
+
         Text(
             "Aiko Lingo ♡",
             style = MaterialTheme.typography.headlineLarge,
@@ -187,16 +189,22 @@ fun MainMenu(
             color = MaterialTheme.colorScheme.primary
         )
         Text(
-            "Ready for a Nihongo adventure?",
+            "Nihongo · JLPT track",
             modifier = Modifier.padding(top = 4.dp, bottom = 32.dp),
             style = MaterialTheme.typography.bodyLarge,
             color = Color.Gray
         )
-        
+
         MenuRow {
             CuteMenuCard(text = "Learn", icon = "🌱", color = PastelGreen, modifier = Modifier.weight(1f), onClick = onNavigateToLearn)
             Spacer(modifier = Modifier.width(16.dp))
             CuteMenuCard(text = "Review", icon = "🔁", color = PastelBlue, modifier = Modifier.weight(1f), onClick = onNavigateToReview)
+        }
+        Spacer(modifier = Modifier.height(16.dp))
+        MenuRow {
+            CuteMenuCard(text = "Courses", icon = "📖", color = PastelPurple, modifier = Modifier.weight(1f), onClick = onNavigateToCourses)
+            Spacer(modifier = Modifier.width(16.dp))
+            CuteMenuCard(text = "Grammar", icon = "✏️", color = PastelYellow, modifier = Modifier.weight(1f), onClick = onNavigateToGrammar)
         }
         Spacer(modifier = Modifier.height(16.dp))
         MenuRow {
@@ -210,13 +218,9 @@ fun MainMenu(
             Spacer(modifier = Modifier.width(16.dp))
             CuteMenuCard(text = "Ranks", icon = "🏆", color = PastelYellow, modifier = Modifier.weight(1f), onClick = onNavigateToLeaderboard)
         }
-        
+
         Spacer(modifier = Modifier.height(48.dp))
-        
-        TextButton(
-            onClick = onToggleTheme,
-            modifier = Modifier.padding(bottom = 32.dp)
-        ) {
+        TextButton(onClick = onToggleTheme, modifier = Modifier.padding(bottom = 32.dp)) {
             Text("✨ Switch Aesthetic ✨", fontWeight = FontWeight.Bold)
         }
     }
@@ -243,9 +247,7 @@ fun CuteMenuCard(
         onClick = onClick,
         modifier = modifier.height(110.dp),
         shape = RoundedCornerShape(28.dp),
-        colors = CardDefaults.cardColors(
-            containerColor = color
-        ),
+        colors = CardDefaults.cardColors(containerColor = color),
         elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
     ) {
         Column(
@@ -255,12 +257,7 @@ fun CuteMenuCard(
         ) {
             Text(icon, fontSize = 32.sp)
             Spacer(modifier = Modifier.height(4.dp))
-            Text(
-                text = text,
-                fontSize = 18.sp,
-                fontWeight = FontWeight.ExtraBold,
-                color = ShoujoText
-            )
+            Text(text = text, fontSize = 18.sp, fontWeight = FontWeight.ExtraBold, color = ShoujoText)
         }
     }
 }
