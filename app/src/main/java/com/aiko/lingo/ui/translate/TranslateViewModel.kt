@@ -8,6 +8,7 @@ import androidx.lifecycle.viewModelScope
 import com.aiko.lingo.data.model.TranslateRequest
 import com.aiko.lingo.data.model.TranslationResult
 import com.aiko.lingo.data.remote.AikoApiService
+import com.aiko.lingo.data.remote.LingoCache
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
@@ -20,18 +21,25 @@ class TranslateViewModel(private val apiService: AikoApiService) : ViewModel() {
 
     fun translate(text: String) {
         if (text.isBlank()) return
+        val key = text.trim()
 
         viewModelScope.launch {
+            // Repeat translations come from cache instantly (10-min TTL).
+            LingoCache.get<List<TranslationResult>>("tr_$key", 600_000)?.let {
+                _uiState.value = TranslateUiState.Success(it)
+                return@launch
+            }
             val currentState = _uiState.value
             if (currentState is TranslateUiState.Success) {
                 _uiState.value = currentState.copy(isRefreshing = true)
             } else {
                 _uiState.value = TranslateUiState.Loading
             }
-            
-            stopAudio() 
+
+            stopAudio()
             try {
-                val response = apiService.translate(TranslateRequest(text))
+                val response = apiService.translate(TranslateRequest(key))
+                LingoCache.put("tr_$key", response.translations)
                 _uiState.value = TranslateUiState.Success(response.translations)
             } catch (e: Exception) {
                 Log.e("Lingo", "Translation error", e)

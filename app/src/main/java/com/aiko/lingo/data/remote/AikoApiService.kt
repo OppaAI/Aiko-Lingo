@@ -88,6 +88,16 @@ interface AikoApiService {
 
     @POST("api/nihongo/conversation/review/respond")
     suspend fun respondToReview(@Body request: ReviewResponseRequest): ReviewResponseData
+
+    // Random 10-card learnt sessions (equal-or-lower JLPT, repeats by chance)
+    @GET("api/nihongo/review/session")
+    suspend fun getReviewSession(@Query("n") n: Int = 10): List<ReviewCard>
+
+    @GET("api/nihongo/practice/session")
+    suspend fun getPracticeSession(@Query("n") n: Int = 10): List<ReviewCard>
+
+    @POST("api/nihongo/practice/mark")
+    suspend fun markPractice(@Body body: PracticeMarkRequest): PracticeMarkResponse
 }
 
 @Serializable
@@ -159,3 +169,9 @@ data class CourseDetail(
     val kind: String = "",
     val cards: List<CourseCardDto> = emptyList(),
 )
+
+@Serializable
+data class PracticeMarkRequest(val correct: Int, val total: Int)
+
+@Serializable
+data class PracticeMarkResponse(val xp: Int = 0, val correct: Int = 0)

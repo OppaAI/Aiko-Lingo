@@ -1,47 +1,10 @@
 package com.aiko.lingo.ui.review
 
 /*
-=====================================================================
-BUGFIX PASS (this version):
-  1. startReviewSession() was called from init{} but was private, so
-     if it failed there was no way to retry short of navigating away
-     and back (which recreates the ViewModel). Added a public
-     retryLoadCards() the screen's Error state can call directly.
-
-BUGFIX PASS (this version, cont. -- audit fix #5):
-  2. ReviewResponseData.toast (e.g. "🌟 word = meaning" on an Easy
-     grade) was already modeled but never read. It's now surfaced
-     through a toastMessage StateFlow so ReviewScreen can display it.
-
-BUGFIX PASS (this version, cont. -- audit fix):
-  3. The backend returns HTTP 400 "No cards due for review" when the
-     queue is empty -- a normal, expected state, not a failure. It was
-     previously caught by the generic `catch (e: Exception)` and shown
-     as a red Error screen with a Retry button that just re-hit the
-     same empty queue and errored again, forever. An HTTP 400 from
-     startReviewSession() is now treated as ReviewUiState.Finished(0),
-     the same "you're all caught up" state a user reaches after
-     clearing their last due card.
-
-DUOLINGO-STYLE UPGRADES (this version):
-  4. Added "Targeted Practice" mode. If initialized with mode=PRACTICE,
-     it hits the `api/nihongo/weak-vocab` endpoint to fetch the cards
-     the user is failing most often, instead of the SRS due queue.
-  5. Added `choices` StateFlow to support Multiple Choice questions,
-     a staple Duolingo feature. It automatically generates 3
-     distractors from other cards in the current session.
-
-SRS CHOICE FIX (this version):
-  6. In SRS mode, we often only have one card at a time. Fixed
-     generateChoices to fetch a fallback pool of weak vocabulary
-     to use as distractors if the current session pool is empty.
-  7. Added a hardcoded fallback list of common Japanese meanings to
-     ensure 4 choices are ALWAYS present even for brand-new users.
-
-LEARN / REVIEW SPLIT:
-  8. Removed ReviewMode.LEARN — learning new vocab is the Learn screen
-     (lesson decks + pregen pool). Review is only SRS + weak practice.
-=====================================================================
+Review = one session of 10 random learnt cards (equal-or-lower JLPT).
+Cards may repeat across sessions by chance — correct answers can show
+again later. Each answer is still graded through SM-2 (respondToReview)
+so scheduling + XP keep working; the session simply ends after 10.
 */
 
 import android.util.Log
@@ -56,20 +19,25 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import retrofit2.HttpException
 
-enum class ReviewMode {
-    SRS, // Spaced-repetition of words you have already learnt
-    PRACTICE, // Targeted practice for weak vocabulary
-}
-
 class ReviewViewModel(private val apiService: AikoApiService) : ViewModel() {
+
+    companion object {
+        const val SESSION_SIZE = 10
+    }
 
     private val _uiState = MutableStateFlow<ReviewUiState>(ReviewUiState.Loading)
     val uiState = _uiState.asStateFlow()
 
+    private val _session = MutableStateFlow<List<ReviewCard>>(emptyList())
+    val session = _session.asStateFlow()
+
+    private val _index = MutableStateFlow(0)
+    val index = _index.asStateFlow()
+
     private val _currentCard = MutableStateFlow<ReviewCard?>(null)
     val currentCard = _currentCard.asStateFlow()
 
-    private val _cardsDue = MutableStateFlow(0)
+    private val _cardsDue = MutableStateFlow(SESSION_SIZE)
     val cardsDue = _cardsDue.asStateFlow()
 
     private val _reviewsCompleted = MutableStateFlow(0)
@@ -78,13 +46,8 @@ class ReviewViewModel(private val apiService: AikoApiService) : ViewModel() {
     private val _toastMessage = MutableStateFlow<Toast?>(null)
     val toastMessage = _toastMessage.asStateFlow()
 
-    // DUOLINGO UPGRADE: support for multiple choice questions
     private val _choices = MutableStateFlow<List<String>>(emptyList())
     val choices = _choices.asStateFlow()
-
-    private var allCardsInSession = listOf<ReviewCard>()
-    private var distractorPool = listOf<String>()
-    private var currentMode = ReviewMode.SRS
 
     private val FALLBACK_MEANINGS = listOf(
         "to go", "to come", "to see", "to drink", "to eat",
@@ -94,63 +57,30 @@ class ReviewViewModel(private val apiService: AikoApiService) : ViewModel() {
         "Nice to meet you", "See you later", "I hope so", "That's right"
     )
 
-    fun setMode(mode: ReviewMode) {
-        currentMode = mode
-        loadCards()
+    init {
+        loadSession()
     }
 
     fun dismissToast() {
         _toastMessage.value = null
     }
 
-    private fun loadCards() {
+    fun loadSession() {
         viewModelScope.launch {
             _uiState.value = ReviewUiState.Loading
-            
-            // Prefetch a pool of potential distractors in the background
-            launch {
-                try {
-                    val weak = apiService.getWeakVocab()
-                    distractorPool = weak.map { it.meaning }
-                } catch (e: Exception) {
-                    Log.w("Review", "Failed to fetch distractor pool", e)
-                }
-            }
-
+            _reviewsCompleted.value = 0
+            _index.value = 0
             try {
-                when (currentMode) {
-                    ReviewMode.PRACTICE -> {
-                        Log.d("Review", "Loading cards for mode: $currentMode")
-                        val cards = apiService.getWeakVocab()
-
-                        Log.d("Review", "Final card count for $currentMode: ${cards.size}")
-
-                        if (cards.isEmpty()) {
-                            _uiState.value = ReviewUiState.Finished(0)
-                        } else {
-                            allCardsInSession = cards
-                            _currentCard.value = cards.first()
-                            _cardsDue.value = cards.size
-                            _uiState.value = ReviewUiState.Reviewing
-                            generateChoices(cards.first())
-                        }
-                    }
-                    ReviewMode.SRS -> {
-                        Log.d("Review", "Loading SRS cards")
-                        val response = apiService.startReviewSession()
-                        val first = response.first_card
-                        if (first == null) {
-                            _reviewsCompleted.value = 0
-                            _cardsDue.value = 0
-                            _uiState.value = ReviewUiState.Finished(0)
-                        } else {
-                            Log.d("Review", "SRS session started: ${response.cards_due} cards, first: ${first.hiragana}")
-                            _currentCard.value = first
-                            _cardsDue.value = response.cards_due
-                            _uiState.value = ReviewUiState.Reviewing
-                            generateChoices(first)
-                        }
-                    }
+                val cards = apiService.getReviewSession(SESSION_SIZE)
+                if (cards.isEmpty()) {
+                    _cardsDue.value = 0
+                    _uiState.value = ReviewUiState.Finished(0)
+                } else {
+                    _session.value = cards
+                    _currentCard.value = cards.first()
+                    _cardsDue.value = cards.size
+                    _uiState.value = ReviewUiState.Reviewing
+                    generateChoices(cards.first())
                 }
             } catch (e: HttpException) {
                 if (e.code() == 400) {
@@ -158,30 +88,26 @@ class ReviewViewModel(private val apiService: AikoApiService) : ViewModel() {
                     _cardsDue.value = 0
                     _uiState.value = ReviewUiState.Finished(0)
                 } else {
-                    Log.e("Review", "Failed to load cards", e)
+                    Log.e("Review", "Failed to load session", e)
                     _uiState.value = ReviewUiState.Error(e.message() ?: "Failed to load cards")
                 }
             } catch (e: Exception) {
-                Log.e("Review", "Failed to load cards", e)
+                Log.e("Review", "Failed to load session", e)
                 _uiState.value = ReviewUiState.Error(e.message ?: "Failed to load cards")
             }
         }
     }
 
     private fun generateChoices(correctCard: ReviewCard) {
-        val sessionDistractors = allCardsInSession
+        val sessionDistractors = _session.value
             .filter { it.card_id != correctCard.card_id }
             .map { it.meaning }
-            
-        val poolDistractors = distractorPool
-            .filter { it != correctCard.meaning && it !in sessionDistractors }
-            
-        var combinedDistractors = (sessionDistractors + poolDistractors)
+
+        var combinedDistractors = sessionDistractors
             .distinct()
             .shuffled()
             .take(3)
-        
-        // Final fallback distractors if we still don't have 3
+
         if (combinedDistractors.size < 3) {
             val needed = 3 - combinedDistractors.size
             val extraDistractors = FALLBACK_MEANINGS
@@ -191,12 +117,11 @@ class ReviewViewModel(private val apiService: AikoApiService) : ViewModel() {
             combinedDistractors = combinedDistractors + extraDistractors
         }
 
-        val finalChoices = (combinedDistractors + correctCard.meaning).shuffled()
-        _choices.value = finalChoices
+        _choices.value = (combinedDistractors + correctCard.meaning).shuffled()
     }
 
     fun retryLoadCards() {
-        loadCards()
+        loadSession()
     }
 
     fun submitReview(cardId: Int, response: String, grade: Int) {
@@ -213,10 +138,13 @@ class ReviewViewModel(private val apiService: AikoApiService) : ViewModel() {
 
                 result.toast?.let { _toastMessage.value = it }
 
-                if (result.next_card != null) {
-                    _currentCard.value = result.next_card
-                    _cardsDue.value = result.cards_remaining
-                    generateChoices(result.next_card)
+                val nextIndex = _index.value + 1
+                _index.value = nextIndex
+                _cardsDue.value = _session.value.size - nextIndex
+                if (nextIndex < _session.value.size) {
+                    val next = _session.value[nextIndex]
+                    _currentCard.value = next
+                    generateChoices(next)
                 } else {
                     _uiState.value = ReviewUiState.Finished(result.cards_remaining)
                 }

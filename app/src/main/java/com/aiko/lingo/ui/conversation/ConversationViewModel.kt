@@ -72,7 +72,10 @@ import okhttp3.ResponseBody
 import retrofit2.HttpException
 import java.util.concurrent.atomic.AtomicBoolean
 
-class ConversationViewModel(private val apiService: AikoApiService) : ViewModel() {
+class ConversationViewModel(
+    private val apiService: AikoApiService,
+    private val streamingApi: AikoApiService = apiService,
+) : ViewModel() {
 
     // FIX #1: lenient Json instance used for decoding stream chunks.
     private val json = Json { ignoreUnknownKeys = true }
@@ -120,7 +123,7 @@ class ConversationViewModel(private val apiService: AikoApiService) : ViewModel(
             _uiState.value = ConversationUiState.Loading
             _karaokeText.value = ""
             try {
-                val responseBody = apiService.startConversationStream(ConversationStartRequest(level))
+                val responseBody = streamingApi.startConversationStream(ConversationStartRequest(level))
                 handleStream(responseBody)
             } catch (e: Exception) {
                 Log.e("Lingo", "Start failed", e)
@@ -215,7 +218,7 @@ class ConversationViewModel(private val apiService: AikoApiService) : ViewModel(
                 _karaokeText.value = "" 
                 
                 try {
-                    val responseBody = apiService.respondToConversationStream(
+                    val responseBody = streamingApi.respondToConversationStream(
                         ConversationRespondRequest(text = text, history = history)
                     )
                     handleStream(responseBody)

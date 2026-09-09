@@ -5,6 +5,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.aiko.lingo.data.model.LeaderboardResponse
 import com.aiko.lingo.data.remote.AikoApiService
+import com.aiko.lingo.data.remote.LingoCache
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
@@ -15,18 +16,26 @@ class LeaderboardViewModel(private val apiService: AikoApiService) : ViewModel()
     val uiState = _uiState.asStateFlow()
 
     init {
+        LingoCache.get<LeaderboardResponse>("leaderboard", 60_000)?.let {
+            _uiState.value = LeaderboardUiState.Success(it)
+        }
         fetchLeaderboard()
     }
 
     fun fetchLeaderboard() {
         viewModelScope.launch {
-            _uiState.value = LeaderboardUiState.Loading
+            if (_uiState.value !is LeaderboardUiState.Success) {
+                _uiState.value = LeaderboardUiState.Loading
+            }
             try {
                 val leaderboard = apiService.getLeaderboard()
+                LingoCache.put("leaderboard", leaderboard)
                 _uiState.value = LeaderboardUiState.Success(leaderboard)
             } catch (e: Exception) {
                 Log.e("Leaderboard", "Failed to fetch leaderboard", e)
-                _uiState.value = LeaderboardUiState.Error(e.message ?: "Failed to load leaderboard")
+                if (_uiState.value !is LeaderboardUiState.Success) {
+                    _uiState.value = LeaderboardUiState.Error(e.message ?: "Failed to load leaderboard")
+                }
             }
         }
     }

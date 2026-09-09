@@ -8,7 +8,7 @@ import androidx.lifecycle.viewModelScope
 import com.aiko.lingo.data.model.StatsResponse
 import com.aiko.lingo.data.model.WordOfDayResponse
 import com.aiko.lingo.data.remote.AikoApiService
-import retrofit2.HttpException
+import com.aiko.lingo.data.remote.LingoCache
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
@@ -22,11 +22,25 @@ class DashboardViewModel(private val apiService: AikoApiService) : ViewModel() {
         refreshStats()
     }
 
+    // Monotonic request id: a slow word-of-day from refresh N must never
+    // overwrite fresher stats emitted by refresh N+1.
+    private var refreshSeq = 0
+
     fun refreshStats() {
-        viewModelScope.launch {
+        // Cache-first: show last-known stats instantly, refresh in background.
+        val cachedStats: StatsResponse? = LingoCache.get("stats", 30_000)
+        val cachedWord: WordOfDayResponse? = LingoCache.get("word", 600_000)
+        val cachedJlpt: String? = LingoCache.get("stats_jlpt", 60_000)
+        if (cachedStats != null) {
+            _uiState.value = DashboardUiState.Success(cachedStats, cachedWord, cachedJlpt ?: "")
+        } else {
             _uiState.value = DashboardUiState.Loading
+        }
+        val seq = ++refreshSeq
+        viewModelScope.launch {
             try {
                 val stats = apiService.getStats()
+                LingoCache.put("stats", stats)
                 // JLPT track is best-effort -- never block stats on it.
                 val jlptLevel = try {
                     apiService.getLearnStatus().level.ifBlank { stats.last_level }
@@ -34,20 +48,30 @@ class DashboardViewModel(private val apiService: AikoApiService) : ViewModel() {
                     Log.w("Dashboard", "JLPT level unavailable", e)
                     stats.last_level
                 }
+                if (seq != refreshSeq) return@launch
                 // Emit stats immediately so the spinner stops; word-of-day
-                // (LLM-backed, can take ~60s for new users) loads after.
-                _uiState.value = DashboardUiState.Success(stats, null, jlptLevel)
+                // (LLM-backed for brand-new users) loads after.
+                _uiState.value = DashboardUiState.Success(stats, cachedWord, jlptLevel)
+                LingoCache.put("stats_jlpt", jlptLevel)
                 viewModelScope.launch {
                     try {
                         val wordOfDay = apiService.getWordOfDay()
+                        if (seq != refreshSeq) return@launch
+                        LingoCache.put("word", wordOfDay)
                         _uiState.value = DashboardUiState.Success(stats, wordOfDay, jlptLevel)
                     } catch (e: Exception) {
                         Log.w("Dashboard", "Word of the day unavailable", e)
                     }
                 }
             } catch (e: Exception) {
-                Log.e("Dashboard", "Failed to fetch stats", e)
-                _uiState.value = DashboardUiState.Error(e.message ?: "Failed to load stats")
+                if (seq != refreshSeq) return@launch
+                // Keep cached content on refresh failure instead of error screen.
+                if (cachedStats == null) {
+                    Log.e("Dashboard", "Failed to fetch stats", e)
+                    _uiState.value = DashboardUiState.Error(e.message ?: "Failed to load stats")
+                } else {
+                    Log.w("Dashboard", "Stats refresh failed, keeping cache", e)
+                }
             }
         }
     }

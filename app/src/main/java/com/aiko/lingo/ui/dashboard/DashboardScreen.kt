@@ -46,7 +46,7 @@ import com.aiko.lingo.ui.theme.*
 fun DashboardScreen(
     viewModel: DashboardViewModel,
     onBack: () -> Unit,
-    onNavigateToReview: (String) -> Unit
+    onNavigateToReview: () -> Unit
 ) {
     val uiState by viewModel.uiState.collectAsState()
 
@@ -123,7 +123,7 @@ private fun DashboardContent(
     stats: StatsResponse,
     wordOfDay: WordOfDayResponse?,
     jlptLevel: String,
-    onNavigateToReview: (String) -> Unit,
+    onNavigateToReview: () -> Unit,
     onPlayWord: (String, String?) -> Unit
 ) {
     Column(modifier = Modifier.fillMaxSize()) {
@@ -258,7 +258,7 @@ private fun WordOfDayCard(word: WordOfDayResponse, onPlayWord: (String, String?)
 }
 
 @Composable
-private fun WeakVocabCard(weakVocab: List<ReviewCard>, onNavigateToReview: (String) -> Unit) {
+private fun WeakVocabCard(weakVocab: List<ReviewCard>, onNavigateToReview: () -> Unit) {
     Card(
         modifier = Modifier.fillMaxWidth().shadow(4.dp, RoundedCornerShape(32.dp)),
         shape = RoundedCornerShape(32.dp),
@@ -301,12 +301,12 @@ private fun WeakVocabCard(weakVocab: List<ReviewCard>, onNavigateToReview: (Stri
             }
             Spacer(modifier = Modifier.height(24.dp))
             Button(
-                onClick = { onNavigateToReview("PRACTICE") },
+                onClick = { onNavigateToReview() },
                 modifier = Modifier.fillMaxWidth().height(52.dp),
                 shape = RoundedCornerShape(16.dp),
                 colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFEF5350))
             ) {
-                Text("Practice Weak Spots", fontWeight = FontWeight.ExtraBold, fontSize = 16.sp)
+                Text("Review Weak Spots", fontWeight = FontWeight.ExtraBold, fontSize = 16.sp)
             }
         }
     }

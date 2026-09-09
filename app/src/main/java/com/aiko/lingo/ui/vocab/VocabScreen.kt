@@ -1,4 +1,4 @@
-package com.aiko.lingo.ui.learn
+package com.aiko.lingo.ui.vocab
 
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -18,12 +18,13 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.aiko.lingo.data.model.LessonDeck
+import com.aiko.lingo.data.remote.CourseDetail
 import com.aiko.lingo.data.remote.LearnSessionResponse
 import com.aiko.lingo.data.remote.LearnStatusResponse
 
 @Composable
-fun LearnScreen(
-    viewModel: LearnViewModel,
+fun VocabScreen(
+    viewModel: VocabViewModel,
     onBack: () -> Unit
 ) {
     val decks by viewModel.decks.collectAsState()
@@ -32,6 +33,12 @@ fun LearnScreen(
     val detailLoading by viewModel.detailLoading.collectAsState()
     val listError by viewModel.listError.collectAsState()
     val detailError by viewModel.detailError.collectAsState()
+    val courses by viewModel.courses.collectAsState()
+    val courseDetail by viewModel.courseDetail.collectAsState()
+    val courseDetailLoading by viewModel.courseDetailLoading.collectAsState()
+    val courseDetailError by viewModel.courseDetailError.collectAsState()
+    val coursesError by viewModel.coursesError.collectAsState()
+    val speakingKey by viewModel.speakingKey.collectAsState()
     val currentLevel by viewModel.currentLevel.collectAsState()
     val levels by viewModel.levels.collectAsState()
     val learnStatus by viewModel.learnStatus.collectAsState()
@@ -41,7 +48,8 @@ fun LearnScreen(
     val poolLoading by viewModel.poolLoading.collectAsState()
     val poolError by viewModel.poolError.collectAsState()
     val lastXpEarned by viewModel.lastXpEarned.collectAsState()
-    val isDetail = detail != null || detailLoading || detailError != null
+    val isDetail = detail != null || detailLoading || detailError != null ||
+        courseDetail != null || courseDetailLoading || courseDetailError != null
 
     Column(
         modifier = Modifier
@@ -50,22 +58,22 @@ fun LearnScreen(
             .padding(16.dp)
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            TextButton(onClick = { if (isDetail) viewModel.backToDecks() else onBack() }) {
+            TextButton(onClick = { if (isDetail) viewModel.backToList() else onBack() }) {
                 Text("← Back")
             }
             Spacer(modifier = Modifier.width(8.dp))
-            Text("Learn new vocab 🌱", style = MaterialTheme.typography.headlineMedium)
+            Text("Vocab 🌱", style = MaterialTheme.typography.headlineMedium)
         }
 
         Spacer(modifier = Modifier.height(16.dp))
 
         when {
-            listLoading && decks.isEmpty() && detail == null && !detailLoading && detailError == null -> {
+            listLoading && decks.isEmpty() && !isDetail -> {
                 Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                     CircularProgressIndicator()
                 }
             }
-            listError != null && decks.isEmpty() && detail == null && !detailLoading && detailError == null -> {
+            listError != null && decks.isEmpty() && !isDetail -> {
                 Column(
                     modifier = Modifier.fillMaxSize(),
                     horizontalAlignment = Alignment.CenterHorizontally,
@@ -81,7 +89,7 @@ fun LearnScreen(
             detail != null -> {
                 if (detailLoading) {
                     LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
-                    Spacer(modifier = Modifier.height(8.dp))
+                    Spacer(Modifier.height(8.dp))
                 }
                 if (detailError != null) {
                     Card(
@@ -93,7 +101,7 @@ fun LearnScreen(
                             TextButton(onClick = { viewModel.retryDetail() }) { Text("Retry detail") }
                         }
                     }
-                    Spacer(modifier = Modifier.height(8.dp))
+                    Spacer(Modifier.height(8.dp))
                 }
                 FlashcardViewer(deck = detail!!, onSpeak = { viewModel.playCard(it) })
             }
@@ -112,7 +120,36 @@ fun LearnScreen(
                     Spacer(modifier = Modifier.height(16.dp))
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         Button(onClick = { viewModel.retryDetail() }) { Text("Retry") }
-                        OutlinedButton(onClick = { viewModel.backToDecks() }) { Text("Back to decks") }
+                        OutlinedButton(onClick = { viewModel.backToList() }) { Text("Back") }
+                    }
+                }
+            }
+            courseDetail != null -> {
+                CourseDetailView(
+                    detail = courseDetail!!,
+                    loading = courseDetailLoading,
+                    error = courseDetailError,
+                    speakingKey = speakingKey,
+                    onRetry = { viewModel.retryCourseDetail() },
+                    onSpeak = { text, key -> viewModel.playCard(text, key) }
+                )
+            }
+            courseDetailLoading -> {
+                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                    CircularProgressIndicator()
+                }
+            }
+            courseDetailError != null -> {
+                Column(
+                    modifier = Modifier.fillMaxSize(),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.Center
+                ) {
+                    Text("Error: $courseDetailError", textAlign = TextAlign.Center)
+                    Spacer(modifier = Modifier.height(16.dp))
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Button(onClick = { viewModel.retryCourseDetail() }) { Text("Retry") }
+                        OutlinedButton(onClick = { viewModel.backToList() }) { Text("Back") }
                     }
                 }
             }
@@ -147,7 +184,7 @@ fun LearnScreen(
                     }
                     item {
                         Text(
-                            "Lesson decks",
+                            "Kana & lessons",
                             style = MaterialTheme.typography.titleMedium,
                             fontWeight = FontWeight.Bold,
                             modifier = Modifier.padding(top = 4.dp)
@@ -179,6 +216,115 @@ fun LearnScreen(
                             }
                         }
                     }
+                    item {
+                        Text(
+                            "Courses 📖",
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold,
+                            modifier = Modifier.padding(top = 4.dp)
+                        )
+                    }
+                    if (coursesError != null && courses.isEmpty()) {
+                        item {
+                            Card(
+                                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.errorContainer),
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Column(Modifier.padding(12.dp)) {
+                                    Text("Couldn't load courses: $coursesError")
+                                    TextButton(onClick = { viewModel.loadCourses() }) { Text("Retry") }
+                                }
+                            }
+                        }
+                    }
+                    if (courses.isEmpty() && coursesError == null) {
+                        item {
+                            Text(
+                                "No course decks yet — check back soon!",
+                                fontSize = 13.sp,
+                                color = MaterialTheme.colorScheme.secondary
+                            )
+                        }
+                    }
+                    items(courses, key = { it.id }) { course ->
+                        Card(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable { viewModel.openCourse(course.id) },
+                            shape = RoundedCornerShape(16.dp)
+                        ) {
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(14.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text(course.title, fontSize = 15.sp, fontWeight = FontWeight.Bold)
+                                    Text(
+                                        "${course.level} · ${course.card_count} cards",
+                                        fontSize = 13.sp,
+                                        color = MaterialTheme.colorScheme.primary
+                                    )
+                                }
+                                Icon(Icons.AutoMirrored.Filled.ArrowForward, contentDescription = "Open course")
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun CourseDetailView(
+    detail: CourseDetail,
+    loading: Boolean,
+    error: String?,
+    speakingKey: String?,
+    onRetry: () -> Unit,
+    onSpeak: (String, String) -> Unit
+) {
+    if (loading) {
+        LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
+        Spacer(Modifier.height(8.dp))
+    }
+    if (error != null) {
+        Card(
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.errorContainer),
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Column(Modifier.padding(12.dp)) {
+                Text("Couldn't refresh course: $error")
+                TextButton(onClick = onRetry) { Text("Retry") }
+            }
+        }
+        Spacer(Modifier.height(8.dp))
+    }
+    Text(detail.title, fontWeight = FontWeight.Bold, fontSize = 16.sp)
+    Text("${detail.level} · ${detail.cards.size} cards", color = MaterialTheme.colorScheme.primary)
+    Spacer(Modifier.height(12.dp))
+    LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        items(detail.cards) { c ->
+            Card(shape = RoundedCornerShape(16.dp), modifier = Modifier.fillMaxWidth()) {
+                Row(
+                    modifier = Modifier.padding(16.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(c.front, fontSize = 17.sp, fontWeight = FontWeight.Bold)
+                        if (c.reading.isNotBlank()) Text(c.reading, fontSize = 14.sp)
+                        Text(c.back, fontSize = 16.sp)
+                        if (c.note.isNotBlank()) Text(c.note, fontSize = 12.sp, color = MaterialTheme.colorScheme.secondary)
+                    }
+                    if (speakingKey == c.front) {
+                        CircularProgressIndicator(modifier = Modifier.size(24.dp), strokeWidth = 2.dp)
+                    } else {
+                        IconButton(onClick = { onSpeak(c.reading.ifBlank { c.front }, c.front) }) {
+                            Icon(Icons.Default.PlayArrow, contentDescription = "Hear pronunciation")
+                        }
+                    }
                 }
             }
         }
@@ -202,7 +348,6 @@ private fun LevelProgressionCard(
                 if (loading) CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
             }
             Spacer(Modifier.height(8.dp))
-            // N5 (lowest/start) -> N1 progression: earn next by clearing current pool.
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 val order = levels.ifEmpty { listOf("N5", "N4", "N3", "N2", "N1") }
                 order.forEach { lvl ->
@@ -287,7 +432,6 @@ private fun LearnPoolCard(
                                 Text("You reached N1 — top rank! 🏆", fontSize = 13.sp)
                             }
                         } else {
-                            // Pool warming / backend still spawning — NOT completion.
                             Text("Preparing $currentLevel words… ⏳", fontWeight = FontWeight.Bold)
                             Text("No waiting on LLM — pool refills in background. Tap reload.", fontSize = 13.sp)
                             Button(onClick = onReload, modifier = Modifier.padding(top = 8.dp), enabled = !loading) { Text("Reload") }

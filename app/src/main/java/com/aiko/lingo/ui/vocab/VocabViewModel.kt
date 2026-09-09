@@ -1,4 +1,4 @@
-package com.aiko.lingo.ui.learn
+package com.aiko.lingo.ui.vocab
 
 import android.media.AudioAttributes
 import android.media.MediaPlayer
@@ -8,20 +8,24 @@ import androidx.lifecycle.viewModelScope
 import com.aiko.lingo.data.model.LessonDeck
 import com.aiko.lingo.data.model.LessonDeckMeta
 import com.aiko.lingo.data.remote.AikoApiService
+import com.aiko.lingo.data.remote.CourseDetail
+import com.aiko.lingo.data.remote.CourseMeta
 import com.aiko.lingo.data.remote.LearnItemDto
 import com.aiko.lingo.data.remote.LearnSessionResponse
 import com.aiko.lingo.data.remote.LearnStatusResponse
+import com.aiko.lingo.data.remote.LingoCache
 import com.aiko.lingo.data.remote.MarkLearnedRequest
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 
-class LearnViewModel(private val apiService: AikoApiService) : ViewModel() {
+class VocabViewModel(private val apiService: AikoApiService) : ViewModel() {
 
     companion object {
         val JLPT_ORDER = listOf("N5", "N4", "N3", "N2", "N1")
     }
 
+    // --- Lesson decks (kana + words & phrases) ---
     private val _decks = MutableStateFlow<List<LessonDeckMeta>>(emptyList())
     val decks = _decks.asStateFlow()
 
@@ -41,6 +45,27 @@ class LearnViewModel(private val apiService: AikoApiService) : ViewModel() {
     val detailError = _detailError.asStateFlow()
 
     private var pendingDeckId: String? = null
+
+    // --- Courses (full JLPT course decks) ---
+    private val _courses = MutableStateFlow<List<CourseMeta>>(emptyList())
+    val courses = _courses.asStateFlow()
+
+    private val _courseDetail = MutableStateFlow<CourseDetail?>(null)
+    val courseDetail = _courseDetail.asStateFlow()
+
+    private val _coursesLoading = MutableStateFlow(false)
+    val coursesLoading = _coursesLoading.asStateFlow()
+
+    private val _courseDetailLoading = MutableStateFlow(false)
+    val courseDetailLoading = _courseDetailLoading.asStateFlow()
+
+    private val _coursesError = MutableStateFlow<String?>(null)
+    val coursesError = _coursesError.asStateFlow()
+
+    private val _courseDetailError = MutableStateFlow<String?>(null)
+    val courseDetailError = _courseDetailError.asStateFlow()
+
+    private var pendingCourseId: String? = null
 
     // --- JLPT level progression (N5 -> N1) ---
     private val _currentLevel = MutableStateFlow("N5")
@@ -72,7 +97,20 @@ class LearnViewModel(private val apiService: AikoApiService) : ViewModel() {
     val lastXpEarned = _lastXpEarned.asStateFlow()
 
     init {
+        // Cache-first: instant content on revisit, refresh in background.
+        LingoCache.get<List<LessonDeckMeta>>("vocab_decks", 600_000)?.let { _decks.value = it }
+        LingoCache.get<List<CourseMeta>>("vocab_courses", 600_000)?.let { _courses.value = it }
+        LingoCache.get<String>("vocab_level", 60_000)?.let { _currentLevel.value = it }
+        LingoCache.get<LearnStatusResponse>("vocab_status", 30_000)?.let {
+            _learnStatus.value = it
+            if (it.level.isNotBlank()) _currentLevel.value = it.level
+        }
+        LingoCache.get<LearnSessionResponse>("vocab_pool", 30_000)?.let { _learnPool.value = it }
+        if (_decks.value.isNotEmpty() || _learnPool.value != null) {
+            _listLoading.value = false
+        }
         loadDecks()
+        loadCourses()
         refreshProgress()
     }
 
@@ -89,10 +127,13 @@ class LearnViewModel(private val apiService: AikoApiService) : ViewModel() {
             _levelError.value = null
             try {
                 val res = apiService.getLevel()
-                if (res.level.isNotBlank()) _currentLevel.value = res.level
+                if (res.level.isNotBlank()) {
+                    _currentLevel.value = res.level
+                    LingoCache.put("vocab_level", res.level)
+                }
                 if (res.levels.isNotEmpty()) _levels.value = res.levels.sortedBy { JLPT_ORDER.indexOf(it).takeIf { i -> i >= 0 } ?: 99 }
             } catch (e: Exception) {
-                Log.e("Learn", "Failed to fetch level", e)
+                Log.e("Vocab", "Failed to fetch level", e)
                 _levelError.value = e.message ?: "Failed to load level"
             }
             _levelLoading.value = false
@@ -104,11 +145,11 @@ class LearnViewModel(private val apiService: AikoApiService) : ViewModel() {
             try {
                 val status = apiService.getLearnStatus()
                 _learnStatus.value = status
+                LingoCache.put("vocab_status", status)
                 if (status.level.isNotBlank()) _currentLevel.value = status.level
                 if (status.levels.isNotEmpty()) _levels.value = status.levels.sortedBy { JLPT_ORDER.indexOf(it).takeIf { i -> i >= 0 } ?: 99 }
             } catch (e: Exception) {
-                Log.e("Learn", "Failed to fetch learn status", e)
-                // Non-fatal: decks still work without status.
+                Log.e("Vocab", "Failed to fetch learn status", e)
             }
         }
     }
@@ -118,10 +159,14 @@ class LearnViewModel(private val apiService: AikoApiService) : ViewModel() {
             _poolLoading.value = true
             _poolError.value = null
             try {
-                _learnPool.value = apiService.getLearnNew()
+                val pool = apiService.getLearnNew()
+                _learnPool.value = pool
+                LingoCache.put("vocab_pool", pool)
             } catch (e: Exception) {
-                Log.e("Learn", "Failed to fetch learn pool", e)
-                _poolError.value = e.message ?: "Failed to load new vocab"
+                Log.e("Vocab", "Failed to fetch learn pool", e)
+                if (_learnPool.value == null) {
+                    _poolError.value = e.message ?: "Failed to load new vocab"
+                }
             }
             _poolLoading.value = false
         }
@@ -140,11 +185,11 @@ class LearnViewModel(private val apiService: AikoApiService) : ViewModel() {
                 val res = apiService.setLevel(com.aiko.lingo.data.remote.SetLevelRequest(level))
                 if (res.level.isNotBlank()) _currentLevel.value = res.level
                 if (res.levels.isNotEmpty()) _levels.value = res.levels.sortedBy { JLPT_ORDER.indexOf(it).takeIf { i -> i >= 0 } ?: 99 }
-                // Level changed -> pool + status are stale.
+                LingoCache.invalidate("vocab_pool", "vocab_status")
                 loadLearnStatus()
                 loadLearnPool()
             } catch (e: Exception) {
-                Log.e("Learn", "Failed to set level", e)
+                Log.e("Vocab", "Failed to set level", e)
                 _levelError.value = e.message ?: "Failed to set level"
             }
             _levelLoading.value = false
@@ -158,8 +203,6 @@ class LearnViewModel(private val apiService: AikoApiService) : ViewModel() {
     }
 
     fun isCurrentComplete(): Boolean {
-        // Empty pool alone is NOT completion (backend may still be warming).
-        // Require evidence the user actually learned something first.
         if (!hasProgress()) return false
         val pool = _learnPool.value
         if (pool != null) {
@@ -175,9 +218,9 @@ class LearnViewModel(private val apiService: AikoApiService) : ViewModel() {
         val curIdx = order.indexOf(_currentLevel.value).takeIf { it >= 0 } ?: 0
         val idx = order.indexOf(level)
         if (idx < 0) return false
-        if (idx <= curIdx) return true // review easier levels
+        if (idx <= curIdx) return true
         if (idx == curIdx + 1) return isCurrentComplete()
-        return false // can't skip N5 -> N1 directly
+        return false
     }
 
     fun nextLevel(): String? {
@@ -194,11 +237,11 @@ class LearnViewModel(private val apiService: AikoApiService) : ViewModel() {
             try {
                 val res = apiService.markLearned(MarkLearnedRequest(items))
                 _lastXpEarned.value = res.xp
-                // Refresh pool + status so progress bar / pending count advance.
+                LingoCache.invalidate("vocab_pool", "vocab_status")
                 loadLearnStatus()
                 loadLearnPool()
             } catch (e: Exception) {
-                Log.e("Learn", "Failed to mark learned", e)
+                Log.e("Vocab", "Failed to mark learned", e)
                 _poolError.value = e.message ?: "Failed to save progress"
             }
             _poolLoading.value = false
@@ -211,14 +254,17 @@ class LearnViewModel(private val apiService: AikoApiService) : ViewModel() {
 
     fun loadDecks() {
         viewModelScope.launch {
-            _listLoading.value = true
+            if (_decks.value.isEmpty()) _listLoading.value = true
             _listError.value = null
             try {
                 val decks = apiService.getLessons()
                 _decks.value = decks
+                LingoCache.put("vocab_decks", decks)
             } catch (e: Exception) {
-                Log.e("Learn", "Failed to fetch lesson decks", e)
-                _listError.value = e.message ?: "Failed to load lessons"
+                Log.e("Vocab", "Failed to fetch lesson decks", e)
+                if (_decks.value.isEmpty()) {
+                    _listError.value = e.message ?: "Failed to load lessons"
+                }
             }
             _listLoading.value = false
         }
@@ -233,7 +279,7 @@ class LearnViewModel(private val apiService: AikoApiService) : ViewModel() {
                 val deck = apiService.getLesson(deckId)
                 _detail.value = deck
             } catch (e: Exception) {
-                Log.e("Learn", "Failed to fetch lesson deck", e)
+                Log.e("Vocab", "Failed to fetch lesson deck", e)
                 _detailError.value = e.message ?: "Failed to load lesson"
             }
             _detailLoading.value = false
@@ -244,26 +290,66 @@ class LearnViewModel(private val apiService: AikoApiService) : ViewModel() {
         pendingDeckId?.let { openDeck(it) }
     }
 
-    fun backToDecks() {
+    fun loadCourses() {
+        viewModelScope.launch {
+            _coursesError.value = null
+            try {
+                val decks = apiService.getCourses()
+                _courses.value = decks
+                LingoCache.put("vocab_courses", decks)
+            } catch (e: Exception) {
+                Log.e("Vocab", "Failed to fetch courses", e)
+                if (_courses.value.isEmpty()) {
+                    _coursesError.value = e.message ?: "Failed to load courses"
+                }
+            }
+        }
+    }
+
+    fun openCourse(id: String) {
+        pendingCourseId = id
+        viewModelScope.launch {
+            _courseDetailLoading.value = true
+            _courseDetailError.value = null
+            try {
+                _courseDetail.value = apiService.getCourse(id)
+            } catch (e: Exception) {
+                Log.e("Vocab", "Failed to fetch course", e)
+                _courseDetailError.value = e.message ?: "Failed to load course"
+            }
+            _courseDetailLoading.value = false
+        }
+    }
+
+    fun retryCourseDetail() {
+        pendingCourseId?.let { openCourse(it) }
+    }
+
+    fun backToList() {
         _detail.value = null
         _detailError.value = null
         _detailLoading.value = false
         pendingDeckId = null
+        _courseDetail.value = null
+        _courseDetailError.value = null
+        _courseDetailLoading.value = false
+        pendingCourseId = null
         if (_decks.value.isEmpty() && !_listLoading.value) {
             loadDecks()
         }
     }
 
+    // --- Pronunciation (TTS + guarded MediaPlayer, stale-tap safe) ---
+    private val _speakingKey = MutableStateFlow<String?>(null)
+    val speakingKey = _speakingKey.asStateFlow()
+
     private var mediaPlayer: MediaPlayer? = null
-    // Generation counter: a tap while another card is still preparing must
-    // not let the stale player start over the new one (the "mixed audio"
-    // bug). Only the latest generation is allowed to start.
     private var playToken = 0
 
-    // Speak the current flashcard (reading, falling back to the front text).
-    fun playCard(text: String) {
+    fun playCard(text: String, key: String = text) {
         if (text.isBlank()) return
         stopAudio()
+        _speakingKey.value = key
         val token = ++playToken
         viewModelScope.launch {
             var currentPlayer: MediaPlayer? = null
@@ -281,28 +367,36 @@ class LearnViewModel(private val apiService: AikoApiService) : ViewModel() {
                     setOnPreparedListener { player ->
                         if (token != playToken) {
                             try { player?.release() } catch (e: Exception) {
-                                Log.e("Learn", "Error releasing stale player", e) }
+                                Log.e("Vocab", "Error releasing stale player", e) }
                             return@setOnPreparedListener
                         }
                         try { player?.start() } catch (e: Exception) {
-                        Log.e("Learn", "Failed to start card audio", e) } }
-                    setOnCompletionListener { try { release() } catch (e: Exception) {
-                        Log.e("Learn", "Error releasing card player", e) }
-                        mediaPlayer = null }
-                    setOnErrorListener { mp, what, extra ->
-                        Log.e("Learn", "Card audio error: what=$what, extra=$extra")
-                        try { mp?.release() } catch (e: Exception) {
-                            Log.e("Learn", "Error releasing card player", e) }
+                            Log.e("Vocab", "Failed to start card audio", e)
+                            if (token == playToken) _speakingKey.value = null
+                        }
+                    }
+                    setOnCompletionListener {
+                        try { release() } catch (e: Exception) {
+                            Log.e("Vocab", "Error releasing card player", e) }
                         mediaPlayer = null
+                        if (token == playToken) _speakingKey.value = null
+                    }
+                    setOnErrorListener { mp, what, extra ->
+                        Log.e("Vocab", "Card audio error: what=$what, extra=$extra")
+                        try { mp?.release() } catch (e: Exception) {
+                            Log.e("Vocab", "Error releasing card player", e) }
+                        mediaPlayer = null
+                        if (token == playToken) _speakingKey.value = null
                         true
                     }
                 }
                 mediaPlayer = currentPlayer
             } catch (e: Exception) {
-                Log.e("Learn", "Card audio playback error", e)
+                Log.e("Vocab", "Card audio playback error", e)
                 try { currentPlayer?.release() } catch (re: Exception) {
-                    Log.e("Learn", "Error releasing card player", re) }
+                    Log.e("Vocab", "Error releasing card player", re) }
                 mediaPlayer = null
+                if (token == playToken) _speakingKey.value = null
             }
         }
     }
@@ -313,9 +407,10 @@ class LearnViewModel(private val apiService: AikoApiService) : ViewModel() {
             mediaPlayer?.stop()
             mediaPlayer?.release()
         } catch (e: Exception) {
-            Log.e("Learn", "Error stopping card audio", e)
+            Log.e("Vocab", "Error stopping card audio", e)
         } finally {
             mediaPlayer = null
+            _speakingKey.value = null
         }
     }
 
@@ -323,11 +418,4 @@ class LearnViewModel(private val apiService: AikoApiService) : ViewModel() {
         super.onCleared()
         stopAudio()
     }
-}
-
-sealed class LearnUiState {
-    object Loading : LearnUiState()
-    data class Decks(val decks: List<LessonDeckMeta>) : LearnUiState()
-    data class Detail(val deck: LessonDeck) : LearnUiState()
-    data class Error(val message: String) : LearnUiState()
 }

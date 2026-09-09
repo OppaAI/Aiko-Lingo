@@ -19,6 +19,13 @@ val PastelYellowDark = Color(0xFFFFF176)
 val PastelPurple = Color(0xFFF3E5F5)
 val PastelPurpleDark = Color(0xFFBA68C8)
 
+// Main-menu cards: 8 distinct hues, all contrasting the pink background.
+val MenuPracticeBlue = Color(0xFF90CAF9)
+val MenuCoursesPurple = Color(0xFFCEB9E8)
+val MenuStatsTeal = Color(0xFFB2DFDB)
+val MenuRanksGold = Color(0xFFFFE082)
+val MenuPracticeCoral = Color(0xFFFFAB91)
+
 // Lavender Glass Theme (Dark)
 val LavenderDeep = Color(0xFF2E1A47)
 val LavenderMid = Color(0xFF4B2C7A)
