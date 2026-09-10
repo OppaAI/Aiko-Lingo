@@ -464,6 +464,26 @@ Apache 2.0 License. See [LICENSE](./LICENSE) for details.
 
 ---
 
+## Third-Party Data
+
+This project uses the JLPT vocabulary and kanji dataset from
+[OpenJLPT](https://github.com/evanclan/OpenJLPT) (© evanclan),
+licensed under CC BY-SA 4.0: https://creativecommons.org/licenses/by-sa/4.0/
+
+Used unmodified, as distributed.
+
+OpenJLPT itself is built from:
+- JLPT level lists by Jonathan Waller (https://www.tanos.co.uk/jlpt/) — CC BY
+- KANJIDIC2 (Electronic Dictionary Research and Development Group,
+  https://www.edrdg.org/wiki/KANJIDIC_Project.html) — CC BY-SA 4.0
+- Example sentences from Tatoeba (https://tatoeba.org) — CC-licensed
+
+See OpenJLPT's own NOTICE.md for the complete field-by-field source list.
+
+This work (the dataset as included here) remains licensed under CC BY-SA 4.0.
+
+---
+
 ## Support & Feedback
 
 - **Issues**: Report bugs or request features via [GitHub Issues](https://github.com/OppaAI/Aiko-Lingo/issues)
