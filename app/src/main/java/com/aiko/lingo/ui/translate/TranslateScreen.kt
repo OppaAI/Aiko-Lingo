@@ -35,6 +35,7 @@ import com.aiko.lingo.data.model.TranslationResult
 import com.aiko.lingo.ui.conversation.Toast
 import com.aiko.lingo.ui.theme.*
 import kotlinx.coroutines.delay
+import kotlin.time.Duration.Companion.milliseconds
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -203,7 +204,7 @@ fun TranslateScreen(
                 )
 
                 LaunchedEffect(message) {
-                    delay(3000)
+                    delay(3000.milliseconds)
                     viewModel.dismissAudioError()
                 }
             }
