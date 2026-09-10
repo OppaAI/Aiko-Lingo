@@ -1,5 +1,6 @@
 package com.aiko.lingo
 
+import android.app.Activity
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -15,10 +16,12 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.aiko.lingo.data.ServerConfig
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.activity.enableEdgeToEdge
@@ -27,6 +30,7 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import com.aiko.lingo.data.remote.AikoApiService
+import com.aiko.lingo.data.local.OfflineCache
 import com.aiko.lingo.data.StudyReminderWorker
 import com.aiko.lingo.data.StudyTracker
 import com.aiko.lingo.ui.conversation.ConversationScreen
@@ -63,7 +67,7 @@ class MainActivity : ComponentActivity() {
 
     private val json = Json { ignoreUnknownKeys = true }
 
-    private fun buildApi(connectS: Long, readS: Long, writeS: Long): AikoApiService {
+    private fun buildApi(baseUrl: String, connectS: Long, readS: Long, writeS: Long): AikoApiService {
         val okHttpClient = OkHttpClient.Builder()
             .connectTimeout(connectS, TimeUnit.SECONDS)
             .readTimeout(readS, TimeUnit.SECONDS)
@@ -71,23 +75,25 @@ class MainActivity : ComponentActivity() {
             .build()
 
         return Retrofit.Builder()
-            .baseUrl("https://aiko.ide-chroma.ts.net/")
+            .baseUrl(baseUrl)
             .client(okHttpClient)
             .addConverterFactory(json.asConverterFactory("application/json".toMediaType()))
             .build()
             .create(AikoApiService::class.java)
     }
 
+    // Server address is user-configurable (menu → Server ⚙️), never hardcoded.
     // Short timeouts for JSON calls so failures show Retry fast instead of
     // spinning; long timeouts only for LLM streaming (conversation).
-    private val apiService by lazy { buildApi(20, 25, 25) }
-    private val streamingApi by lazy { buildApi(120, 120, 120) }
+    private val apiService by lazy { buildApi(ServerConfig.get(this), 20, 25, 25) }
+    private val streamingApi by lazy { buildApi(ServerConfig.get(this), 120, 120, 120) }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
         // Study reminders: track study days + hourly nudge while idle.
         StudyTracker.init(this)
+        OfflineCache.init(this)
         StudyReminderWorker.schedule(this)
         if (android.os.Build.VERSION.SDK_INT >= 33 &&
             checkSelfPermission(android.Manifest.permission.POST_NOTIFICATIONS) !=
@@ -133,6 +139,7 @@ private fun AikoLingoApp(apiService: AikoApiService, streamingApi: AikoApiServic
     val navController = rememberNavController()
     // Remember so theme toggles (recomposition) don't rebuild it.
     val factory = remember(apiService, streamingApi) { ViewModelFactory(apiService, streamingApi) }
+    val context = LocalContext.current
 
     NavHost(navController = navController, startDestination = "menu") {
         composable("menu") {
@@ -145,7 +152,13 @@ private fun AikoLingoApp(apiService: AikoApiService, streamingApi: AikoApiServic
                 onNavigateToGrammar = { navController.navigate("grammar") },
                 onNavigateToDashboard = { navController.navigate("dashboard") },
                 onNavigateToLeaderboard = { navController.navigate("leaderboard") },
-                onToggleTheme = onToggleTheme
+                onToggleTheme = onToggleTheme,
+                serverUrl = ServerConfig.get(context),
+                onSaveServerUrl = { raw ->
+                    ServerConfig.set(context, raw)
+                    // Rebuild Retrofit clients against the new address.
+                    (context as? Activity)?.recreate()
+                }
             )
         }
         composable("translate") {
@@ -271,8 +284,11 @@ fun MainMenu(
     onNavigateToGrammar: () -> Unit,
     onNavigateToDashboard: () -> Unit,
     onNavigateToLeaderboard: () -> Unit,
-    onToggleTheme: () -> Unit
+    onToggleTheme: () -> Unit,
+    serverUrl: String = ServerConfig.DEFAULT_URL,
+    onSaveServerUrl: (String) -> Unit = {}
 ) {
+    var showServerDialog by remember { mutableStateOf(false) }
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -329,15 +345,90 @@ fun MainMenu(
         }
 
         Spacer(modifier = Modifier.height(48.dp))
+        TextButton(onClick = { showServerDialog = true }) {
+            Text(
+                "🔗 ${ServerConfig.displayHost(serverUrl)} ⚙️",
+                fontWeight = FontWeight.Bold,
+                fontSize = 13.sp
+            )
+        }
         TextButton(onClick = onToggleTheme, modifier = Modifier.padding(bottom = 32.dp)) {
             Text("✨ Switch Aesthetic ✨", fontWeight = FontWeight.Bold)
         }
     }
+
+    if (showServerDialog) {
+        ServerUrlDialog(
+            currentUrl = serverUrl,
+            onDismiss = { showServerDialog = false },
+            onSave = {
+                showServerDialog = false
+                onSaveServerUrl(it)
+            }
+        )
+    }
 }
 
 @Composable
-fun MenuRow(content: @Composable RowScope.() -> Unit) {
-    Row(
+fun ServerUrlDialog(
+    currentUrl: String,
+    onDismiss: () -> Unit,
+    onSave: (String) -> Unit
+) {
+    var text by remember(currentUrl) { mutableStateOf(currentUrl) }
+    var error by remember { mutableStateOf<String?>(null) }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Aiko server 🔗", fontWeight = FontWeight.ExtraBold) },
+        text = {
+            Column {
+                Text(
+                    "Tailscale hostname or IP of your Aiko-chan (https preferred).",
+                    fontSize = 13.sp,
+                    color = Color.Gray
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+                OutlinedTextField(
+                    value = text,
+                    onValueChange = {
+                        text = it
+                        error = null
+                    },
+                    modifier = Modifier.fillMaxWidth(),
+                    placeholder = { Text("https://aiko…ts.net/") },
+                    singleLine = true,
+                    isError = error != null,
+                    shape = RoundedCornerShape(12.dp)
+                )
+                if (error != null) {
+                    Text(error!!, color = MaterialTheme.colorScheme.error, fontSize = 12.sp)
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = {
+                if (ServerConfig.isValid(text)) {
+                    onSave(text)
+                } else {
+                    error = "Enter a valid http(s) address."
+                }
+            }) { Text("Save & reconnect") }
+        },
+        dismissButton = {
+            Row {
+                TextButton(onClick = {
+                    text = ServerConfig.DEFAULT_URL
+                    error = null
+                }) { Text("Reset") }
+                TextButton(onClick = onDismiss) { Text("Cancel") }
+            }
+        }
+    )
+}
+
+@Composable
+fun MenuRow(content: @Composable RowScope.() -> Unit) {    Row(
         modifier = Modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.spacedBy(16.dp),
         content = content

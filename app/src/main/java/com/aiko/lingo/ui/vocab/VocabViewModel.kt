@@ -7,6 +7,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.aiko.lingo.data.model.LessonDeck
 import com.aiko.lingo.data.model.LessonDeckMeta
+import com.aiko.lingo.data.local.OfflineCache
 import com.aiko.lingo.data.remote.AikoApiService
 import com.aiko.lingo.data.remote.CourseDetail
 import com.aiko.lingo.data.remote.CourseMeta
@@ -347,6 +348,12 @@ class VocabViewModel(private val apiService: AikoApiService) : ViewModel() {
 
     /** One lesson at a time: the server tracks which lesson is current. */
     fun loadCurrentLesson() {
+        // Offline-first: disk snapshot renders instantly (or with zero
+        // network at all), then the network refreshes underneath.
+        OfflineCache.get<CurrentLessonResponse>(OfflineCache.CURRENT_VOCAB)?.let {
+            _currentLesson.value = it.lesson
+            _lessonProgress.value = it.progress
+        }
         viewModelScope.launch {
             if (_currentLesson.value == null && _lessonProgress.value == null) {
                 _lessonLoading.value = true
@@ -357,6 +364,7 @@ class VocabViewModel(private val apiService: AikoApiService) : ViewModel() {
                 _currentLesson.value = res.lesson
                 _lessonProgress.value = res.progress
                 LingoCache.put("vocab_current", res)
+                OfflineCache.put(OfflineCache.CURRENT_VOCAB, res)
             } catch (e: Exception) {
                 Log.e("Vocab", "Failed to fetch current lesson", e)
                 if (_currentLesson.value == null && _lessonProgress.value == null) {
@@ -370,6 +378,7 @@ class VocabViewModel(private val apiService: AikoApiService) : ViewModel() {
     /** Called after a lesson/final test passes: progression + level may move. */
     fun onTestPassed() {
         LingoCache.invalidate("vocab_current", "vocab_status", "vocab_pool", "vocab_level")
+        OfflineCache.invalidate(OfflineCache.CURRENT_VOCAB)
         loadCurrentLesson()
         refreshProgress()
     }

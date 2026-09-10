@@ -55,7 +55,7 @@
   - A non-streaming `/conversation/respond` endpoint alongside the streaming one, for callers that prefer a single round trip
 - **Spaced Repetition (SRS)** – Vocabulary encountered in conversation is automatically extracted (kanji-cache lookup with an LLM fallback for anything uncommon), JLPT-tagged at learn time, and scheduled with a real SM-2 algorithm. Day-one users get starter N5 cards auto-seeded so Review works immediately
 - **Progress Tracking** – Dashboard with JLPT level badge 🎌, XP & levels, day-over-day streaks, total/learned/due card counts, average ease, Word of the Day (fixed per user per day), and a "Review Weak Spots" widget — all persisted to disk so nothing resets on a server restart. Conversation turns, reviews, learn marks, and practice sessions all contribute to XP and streak
-- **Leaderboard** – Rank, XP, and streak display (currently single-player; see [Roadmap](#development-roadmap))
+- **Leaderboard** – Your rank, XP, and streak display (single-player personal progress)
 - **Toast Notifications** – Server-driven toasts ("Perfect! Let's keep talking.", level-start greetings, "🌟 word = meaning" on an Easy-graded review) surfaced consistently across the Conversation, Translate, and Review screens
 - **Resilience & Speed** – Cache-first screens (revisits render instantly from `LingoCache` while a background refresh updates), short 20–25s timeouts on JSON calls so failures show Retry fast (120s kept only for LLM streaming), retry affordances on every screen instead of dead-end error states; TTS is rate-limited per user with a real `429` response instead of a silent failure
 - **UI Polish**
@@ -66,9 +66,8 @@
 ### Planned (see [Roadmap](#development-roadmap) for build order)
 
 - **Persisted Offline Cache** – Room-backed lesson/weak-vocab/Word-of-the-Day so study screens open with zero network (beyond today's in-memory `LingoCache`)
-- **Dedicated Voice Input** – Microphone → system ASR straight into Practice/Test/Chat inputs (voice already works today via the system keyboard's 🎤 mode, plus ✍️ handwriting the same way)
+- **Private Voice Input** – One-tap mic → clip goes over Tailscale to Aiko-chan's on-device ASR (sherpa-onnx, no cloud), transcript lands in the input. Until then, voice already works via the system keyboard's 🎤 mode, plus ✍️ handwriting the same way
 - **Companion Widget** – Quick translation from the homescreen
-- **Multiplayer Leaderboard** – Real cross-user ranking; today's `/leaderboard` endpoint only ever returns the requesting user (needs a backend endpoint first)
 - **Session Persistence Across Devices** – Per-user state already survives app/backend restarts on the server; a future pass will let it sync across multiple client devices for the same user
 
 ---
@@ -94,12 +93,10 @@
    - Let Gradle sync and download dependencies
 
 3. **Configure server connection:**
-   - The base URL is set in `MainActivity.kt`'s Retrofit builder:
-     ```kotlin
-     .baseUrl("https://aiko.ide-chroma.ts.net/")
-     ```
-   - Point this at your own Aiko-chan device's Tailscale hostname or IP (Tailscale handles TLS termination and auth, so plain `https://<tailscale-hostname>/` is normal here — you don't need your own certificate).
-   - The backend must be a recent Aiko-chan with the `/api/nihongo` lingo router (JLPT endpoints); restart it after pulling backend changes.
+    - No code changes needed: open the app, tap the **🔗 server row** under the main menu, and enter your Aiko-chan's Tailscale hostname (`https://<tailscale-hostname>/`) or Tailnet IP (`http://100.x.y.z:8787/`). Saving reconnects instantly; the choice persists across restarts.
+    - Tailscale handles TLS termination and auth, so plain `https://<tailscale-hostname>/` is normal here — you don't need your own certificate. (Cleartext is allowed for Tailnet IPs only; the WireGuard transport underneath stays encrypted.)
+    - The backend must expose the `/api/nihongo` lingo router; audio URLs are built from the address you actually connect with, so hostnames, IPs, and funnel URLs all just work. Server operators can also pin the public origin via the `AIKO_PUBLIC_BASE_URL` env var (falls back to `REDIRECT_BASE`).
+    - Developers: the default is `ServerConfig.DEFAULT_URL`; Retrofit clients are built from the stored value in `MainActivity.kt`.
 
 4. **Run:**
    - Select an emulator or physical device
@@ -396,9 +393,8 @@ Legacy files (`data/streaks|levels|xp/*.json`, `lingo_vocab.db`, `vocab_pool.db`
 
 ### Phase 5 (Proposed — in recommended build order)
 - [ ] Persisted offline vocabulary cache (Room: bundle current lesson + weak vocab + Word of the Day so study screens open with zero network; sync on refresh) — biggest daily-use win, no backend changes
-- [ ] Dedicated in-app voice input (system `SpeechRecognizer` → fills Practice/Test/Chat inputs; no extra permission beyond the mic prompt, no server work)
+- [ ] Private voice input (one-tap mic → Aiko-chan's on-device sherpa-onnx ASR over Tailscale; no cloud, no new phone permission model beyond the mic prompt)
 - [ ] Companion widget (homescreen quick-translate; small Glance widget reusing `/translate` + TTS)
-- [ ] Multiplayer leaderboard (real cross-user ranking — needs a backend ranking endpoint first, so it goes last)
 
 ---
 

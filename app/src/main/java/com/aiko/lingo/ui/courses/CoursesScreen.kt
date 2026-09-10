@@ -24,6 +24,7 @@ import com.aiko.lingo.data.remote.AikoApiService
 import com.aiko.lingo.data.remote.CourseDetail
 import com.aiko.lingo.data.remote.CourseMeta
 import com.aiko.lingo.data.remote.CurrentLessonResponse
+import com.aiko.lingo.data.local.OfflineCache
 import com.aiko.lingo.data.remote.LessonProgressDto
 import com.aiko.lingo.data.remote.LingoCache
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -49,6 +50,8 @@ class CoursesViewModel(private val api: AikoApiService, private val mode: String
 
     // --- Current lesson progression (one at a time + tests) ---
     private val track get() = if (mode == "grammar") "grammar" else "vocab"
+    private val currentCacheKey
+        get() = if (track == "grammar") OfflineCache.CURRENT_GRAMMAR else OfflineCache.CURRENT_VOCAB
     private val _current = MutableStateFlow<CourseDetail?>(null)
     val current = _current.asStateFlow()
     private val _progress = MutableStateFlow<LessonProgressDto?>(null)
@@ -116,6 +119,11 @@ class CoursesViewModel(private val api: AikoApiService, private val mode: String
 
     /** One lesson at a time: the server tracks which deck is current. */
     fun loadCurrent() {
+        // Offline-first: disk snapshot renders instantly, network refreshes.
+        OfflineCache.get<CurrentLessonResponse>(currentCacheKey)?.let {
+            _current.value = it.lesson
+            _progress.value = it.progress
+        }
         viewModelScope.launch {
             if (_current.value == null && _progress.value == null) {
                 _currentLoading.value = true
@@ -126,6 +134,7 @@ class CoursesViewModel(private val api: AikoApiService, private val mode: String
                 _current.value = res.lesson
                 _progress.value = res.progress
                 LingoCache.put("current_$mode", res)
+                OfflineCache.put(currentCacheKey, res)
             } catch (e: Exception) {
                 Log.e("Courses", "Failed to fetch current lesson", e)
                 if (_current.value == null && _progress.value == null) {
@@ -139,6 +148,7 @@ class CoursesViewModel(private val api: AikoApiService, private val mode: String
     /** Called after a lesson/final test passes: progression may move. */
     fun onTestPassed() {
         LingoCache.invalidate("current_$mode", cacheKey)
+        OfflineCache.invalidate(currentCacheKey)
         loadCurrent()
         reload()
     }

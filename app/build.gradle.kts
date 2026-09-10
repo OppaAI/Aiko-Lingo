@@ -42,6 +42,10 @@ dependencies {
     implementation("androidx.work:work-runtime-ktx:2.10.0")
     implementation("androidx.core:core-ktx:1.17.0")
 
+    // Offline cache (framework SQLiteOpenHelper — no annotation processing)
+    // + homescreen widget (Glance)
+    implementation("androidx.glance:glance-appwidget:1.2.0")
+
     // Coil for images
     implementation("io.coil-kt.coil3:coil-compose:3.6.2")
     implementation("io.coil-kt.coil3:coil-network-okhttp:3.6.2")

@@ -7,6 +7,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.aiko.lingo.data.model.StatsResponse
 import com.aiko.lingo.data.model.WordOfDayResponse
+import com.aiko.lingo.data.local.OfflineCache
 import com.aiko.lingo.data.remote.AikoApiService
 import com.aiko.lingo.data.remote.LingoCache
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -27,9 +28,11 @@ class DashboardViewModel(private val apiService: AikoApiService) : ViewModel() {
     private var refreshSeq = 0
 
     fun refreshStats() {
-        // Cache-first: show last-known stats instantly, refresh in background.
+        // Cache-first: memory, then disk (offline), then network.
         val cachedStats: StatsResponse? = LingoCache.get("stats", 30_000)
+            ?: OfflineCache.get(OfflineCache.STATS)
         val cachedWord: WordOfDayResponse? = LingoCache.get("word", 600_000)
+            ?: OfflineCache.get(OfflineCache.WORD)
         val cachedJlpt: String? = LingoCache.get("stats_jlpt", 60_000)
         if (cachedStats != null) {
             _uiState.value = DashboardUiState.Success(cachedStats, cachedWord, cachedJlpt ?: "")
@@ -41,6 +44,7 @@ class DashboardViewModel(private val apiService: AikoApiService) : ViewModel() {
             try {
                 val stats = apiService.getStats()
                 LingoCache.put("stats", stats)
+                OfflineCache.put(OfflineCache.STATS, stats)
                 // JLPT track is best-effort -- never block stats on it.
                 val jlptLevel = try {
                     apiService.getLearnStatus().level.ifBlank { stats.last_level }
@@ -58,6 +62,7 @@ class DashboardViewModel(private val apiService: AikoApiService) : ViewModel() {
                         val wordOfDay = apiService.getWordOfDay()
                         if (seq != refreshSeq) return@launch
                         LingoCache.put("word", wordOfDay)
+                        OfflineCache.put(OfflineCache.WORD, wordOfDay)
                         _uiState.value = DashboardUiState.Success(stats, wordOfDay, jlptLevel)
                     } catch (e: Exception) {
                         Log.w("Dashboard", "Word of the day unavailable", e)
