@@ -1,5 +1,6 @@
 package com.aiko.lingo.ui.courses
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -244,18 +245,32 @@ fun CoursesScreen(
     val progress by vm.progress.collectAsState()
     val currentLoading by vm.currentLoading.collectAsState()
     val currentError by vm.currentError.collectAsState()
+    val detail by vm.detail.collectAsState()
+    val detailLoading by vm.detailLoading.collectAsState()
+    val detailError by vm.detailError.collectAsState()
     val speakingKey by vm.speakingKey.collectAsState()
 
     Column(
         Modifier.fillMaxSize().safeDrawingPadding().padding(16.dp)
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            TextButton(onClick = onBack) { Text("← Back") }
+            TextButton(onClick = { if (detail != null) vm.backToList() else onBack() }) { Text("← Back") }
             Spacer(Modifier.width(8.dp))
             Text(title, style = MaterialTheme.typography.headlineMedium)
         }
         Spacer(Modifier.height(12.dp))
         when {
+            detail != null || detailLoading || detailError != null -> {
+                GrammarDetailView(
+                    detail = detail,
+                    loading = detailLoading,
+                    error = detailError,
+                    speakingKey = speakingKey,
+                    onRetry = { vm.retryDetail() },
+                    onBack = { vm.backToList() },
+                    onSpeak = { text, key -> vm.playCard(text, key) }
+                )
+            }
             currentLoading && current == null && progress == null -> {
                 Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                     CircularProgressIndicator()
@@ -295,55 +310,18 @@ fun CoursesScreen(
                 val d = current!!
                 val num = progress?.current_lesson ?: 1
                 val total = progress?.lessons_total ?: 0
-                if (currentLoading) {
-                    LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
-                    Spacer(Modifier.height(8.dp))
+                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    GrammarNavCard(
+                        title = if (total > 0) "📖 Deck $num of $total" else "📖 ${d.title}",
+                        subtitle = "${d.title} · ${d.cards.size} patterns",
+                        onClick = { vm.open(d.id) }
+                    )
+                    GrammarNavCard(
+                        title = "✍️ Test $num",
+                        subtitle = "Type every answer · 100% to advance",
+                        onClick = { onNavigateToTest(d.id) }
+                    )
                 }
-                Text(
-                    if (total > 0) "Deck $num of $total · ${d.title}" else d.title,
-                    fontWeight = FontWeight.Bold, fontSize = 16.sp
-                )
-                Text(
-                    "${d.level} · ${d.cards.size} patterns — study, then test ✍️",
-                    color = MaterialTheme.colorScheme.primary,
-                    fontSize = 13.sp
-                )
-                Spacer(Modifier.height(12.dp))
-                LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.weight(1f)) {
-                    items(d.cards, key = { "${it.front}||${it.back}" }) { c ->
-                        Card(shape = RoundedCornerShape(16.dp), modifier = Modifier.fillMaxWidth()) {
-                            Row(
-                                modifier = Modifier.padding(16.dp),
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Column(modifier = Modifier.weight(1f)) {
-                                    Text(c.front, fontSize = 17.sp, fontWeight = FontWeight.Bold)
-                                    if (c.reading.isNotBlank()) Text(c.reading, fontSize = 14.sp)
-                                    Text(c.back, fontSize = 16.sp)
-                                    if (c.note.isNotBlank()) Text(c.note, fontSize = 12.sp, color = MaterialTheme.colorScheme.secondary)
-                                }
-                                if (speakingKey == c.front) {
-                                    CircularProgressIndicator(
-                                        modifier = Modifier.size(24.dp),
-                                        strokeWidth = 2.dp
-                                    )
-                                } else {
-                                    IconButton(onClick = {
-                                        vm.playCard(c.reading.ifBlank { c.front }, key = c.front)
-                                    }) {
-                                        Icon(Icons.Default.PlayArrow, contentDescription = "Hear pronunciation")
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-                Spacer(Modifier.height(8.dp))
-                Button(
-                    onClick = { onNavigateToTest(d.id) },
-                    modifier = Modifier.fillMaxWidth().height(52.dp),
-                    shape = RoundedCornerShape(16.dp)
-                ) { Text("Take Test $num ✍️ (100% to advance)", fontWeight = FontWeight.ExtraBold) }
             }
             else -> {
                 Column(
@@ -356,6 +334,114 @@ fun CoursesScreen(
                     Text("No decks yet — check back soon!", textAlign = TextAlign.Center)
                     Spacer(Modifier.height(8.dp))
                     Button(onClick = { vm.loadCurrent() }) { Text("Reload") }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun GrammarNavCard(title: String, subtitle: String, onClick: () -> Unit) {
+    Card(
+        modifier = Modifier.fillMaxWidth().clickable { onClick() },
+        shape = RoundedCornerShape(16.dp)
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(14.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text(title, fontSize = 16.sp, fontWeight = FontWeight.Bold)
+                Text(subtitle, fontSize = 13.sp, color = MaterialTheme.colorScheme.primary)
+            }
+            Icon(Icons.Default.PlayArrow, contentDescription = "Open")
+        }
+    }
+}
+
+@Composable
+private fun GrammarDetailView(
+    detail: CourseDetail?,
+    loading: Boolean,
+    error: String?,
+    speakingKey: String?,
+    onRetry: () -> Unit,
+    onBack: () -> Unit,
+    onSpeak: (String, String) -> Unit
+) {
+    if (loading && detail == null) {
+        Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+            CircularProgressIndicator()
+        }
+        return
+    }
+    if (error != null && detail == null) {
+        Column(
+            Modifier.fillMaxSize(),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center
+        ) {
+            Text("Error: $error", textAlign = TextAlign.Center)
+            Spacer(Modifier.height(8.dp))
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Button(onClick = onRetry) { Text("Retry") }
+                OutlinedButton(onClick = onBack) { Text("Back") }
+            }
+        }
+        return
+    }
+    val d = detail ?: return
+    if (loading) {
+        LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
+        Spacer(Modifier.height(8.dp))
+    }
+    if (error != null) {
+        Card(
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.errorContainer),
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Column(Modifier.padding(12.dp)) {
+                Text("Couldn't refresh deck: $error")
+                TextButton(onClick = onRetry) { Text("Retry") }
+            }
+        }
+        Spacer(Modifier.height(8.dp))
+    }
+    Text(d.title, fontWeight = FontWeight.Bold, fontSize = 16.sp)
+    Text(
+        "${d.level} · ${d.cards.size} patterns",
+        color = MaterialTheme.colorScheme.primary,
+        fontSize = 13.sp
+    )
+    Spacer(Modifier.height(12.dp))
+    LazyColumn(
+        verticalArrangement = Arrangement.spacedBy(8.dp),
+        modifier = Modifier.fillMaxSize()
+    ) {
+        items(d.cards, key = { "${it.front}||${it.back}" }) { c ->
+            Card(shape = RoundedCornerShape(16.dp), modifier = Modifier.fillMaxWidth()) {
+                Row(
+                    modifier = Modifier.padding(16.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(c.front, fontSize = 17.sp, fontWeight = FontWeight.Bold)
+                        if (c.reading.isNotBlank()) Text(c.reading, fontSize = 14.sp)
+                        Text(c.back, fontSize = 16.sp)
+                        if (c.note.isNotBlank()) Text(c.note, fontSize = 12.sp, color = MaterialTheme.colorScheme.secondary)
+                    }
+                    if (speakingKey == c.front) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(24.dp),
+                            strokeWidth = 2.dp
+                        )
+                    } else {
+                        IconButton(onClick = {
+                            onSpeak(c.reading.ifBlank { c.front }, c.front)
+                        }) {
+                            Icon(Icons.Default.PlayArrow, contentDescription = "Hear pronunciation")
+                        }
+                    }
                 }
             }
         }

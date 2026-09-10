@@ -19,7 +19,6 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.aiko.lingo.data.model.LessonDeck
 import com.aiko.lingo.data.remote.CourseDetail
-import com.aiko.lingo.data.remote.LearnSessionResponse
 import com.aiko.lingo.data.remote.LearnStatusResponse
 import com.aiko.lingo.data.remote.LessonProgressDto
 
@@ -45,10 +44,6 @@ fun VocabScreen(
     val learnStatus by viewModel.learnStatus.collectAsState()
     val levelLoading by viewModel.levelLoading.collectAsState()
     val levelError by viewModel.levelError.collectAsState()
-    val learnPool by viewModel.learnPool.collectAsState()
-    val poolLoading by viewModel.poolLoading.collectAsState()
-    val poolError by viewModel.poolError.collectAsState()
-    val lastXpEarned by viewModel.lastXpEarned.collectAsState()
     val currentLesson by viewModel.currentLesson.collectAsState()
     val lessonProgress by viewModel.lessonProgress.collectAsState()
     val lessonLoading by viewModel.lessonLoading.collectAsState()
@@ -178,22 +173,6 @@ fun VocabScreen(
                         )
                     }
                     item {
-                        LearnPoolCard(
-                            pool = learnPool,
-                            loading = poolLoading,
-                            error = poolError,
-                            xpEarned = lastXpEarned,
-                            currentLevel = currentLevel,
-                            nextLevel = viewModel.nextLevel(),
-                            hasProgress = viewModel.hasProgress(),
-                            isComplete = viewModel.isCurrentComplete(),
-                            onReload = { viewModel.loadLearnPool() },
-                            onMarkLearned = { viewModel.markLearned(it) },
-                            onLevelUp = { viewModel.setLevel(it) },
-                            onDismissXp = { viewModel.clearXpToast() }
-                        )
-                    }
-                    item {
                         Text(
                             "Kana & lessons",
                             style = MaterialTheme.typography.titleMedium,
@@ -236,14 +215,13 @@ fun VocabScreen(
                         )
                     }
                     item {
-                        CurrentLessonCard(
+                        LessonTestButtons(
                             lesson = currentLesson,
                             progress = lessonProgress,
                             loading = lessonLoading,
                             error = lessonError,
-                            speakingKey = speakingKey,
                             onRetry = { viewModel.loadCurrentLesson() },
-                            onSpeak = { text, key -> viewModel.playCard(text, key) },
+                            onOpenLesson = { viewModel.openCourse(it) },
                             onTakeTest = { onNavigateToTest(it) },
                             onFinalTest = onNavigateToFinal
                         )
@@ -255,97 +233,86 @@ fun VocabScreen(
 }
 
 @Composable
-private fun CurrentLessonCard(
+private fun LessonTestButtons(
     lesson: CourseDetail?,
     progress: LessonProgressDto?,
     loading: Boolean,
     error: String?,
-    speakingKey: String?,
     onRetry: () -> Unit,
-    onSpeak: (String, String) -> Unit,
+    onOpenLesson: (String) -> Unit,
     onTakeTest: (String) -> Unit,
     onFinalTest: () -> Unit
 ) {
-    Card(shape = RoundedCornerShape(20.dp), modifier = Modifier.fillMaxWidth()) {
-        Column(Modifier.padding(16.dp)) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(
-                    "Current lesson 📖",
-                    fontWeight = FontWeight.Bold,
-                    fontSize = 15.sp,
-                    modifier = Modifier.weight(1f)
+    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        when {
+            loading && lesson == null && progress == null -> {
+                Box(
+                    modifier = Modifier.fillMaxWidth().padding(16.dp),
+                    contentAlignment = Alignment.Center
+                ) { CircularProgressIndicator() }
+            }
+            error != null && lesson == null && progress == null -> {
+                Card(
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.errorContainer),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Column(Modifier.padding(12.dp)) {
+                        Text("Couldn't load lesson: $error")
+                        TextButton(onClick = onRetry) { Text("Retry") }
+                    }
+                }
+            }
+            progress?.final_unlocked == true -> {
+                val order = VocabViewModel.JLPT_ORDER
+                val idx = order.indexOf(progress.level)
+                val next = if (idx >= 0 && idx + 1 < order.size) order[idx + 1] else null
+                NavCard(
+                    title = "${progress.level} Final Test 🏆",
+                    subtitle = if (next != null) "100 random · 100% unlocks $next" else "100 random · 100% for mastery",
+                    onClick = onFinalTest
                 )
-                if (loading) CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
             }
-            Spacer(Modifier.height(8.dp))
-            when {
-                loading && lesson == null && progress == null -> {
-                    Text("Loading your lesson…", fontSize = 13.sp)
-                }
-                error != null && lesson == null && progress == null -> {
-                    Text("Couldn't load lesson: $error", fontSize = 13.sp)
-                    Button(onClick = onRetry, modifier = Modifier.padding(top = 8.dp)) { Text("Retry") }
-                }
-                progress?.final_unlocked == true -> {
-                    val order = VocabViewModel.JLPT_ORDER
-                    val idx = order.indexOf(progress.level)
-                    val next = if (idx >= 0 && idx + 1 < order.size) order[idx + 1] else null
-                    Text("All ${progress.lessons_total} lessons cleared! ✨", fontWeight = FontWeight.Bold)
-                    Text(
-                        if (next != null) "Final: 100 random questions · 100% unlocks $next 🎯"
-                        else "Final: 100 random questions · 100% for full mastery 🎯",
-                        fontSize = 13.sp
-                    )
-                    Spacer(Modifier.height(8.dp))
-                    Button(onClick = onFinalTest, modifier = Modifier.fillMaxWidth()) {
-                        Text("Take ${progress.level} Final Test 🏆")
-                    }
-                }
-                lesson != null -> {
-                    val num = progress?.current_lesson ?: 1
-                    val total = progress?.lessons_total ?: 0
-                    Text(
-                        if (total > 0) "Lesson $num of $total · ${lesson.title}" else lesson.title,
-                        fontWeight = FontWeight.Bold,
-                        fontSize = 15.sp
-                    )
-                    Text(
-                        "${lesson.level} · ${lesson.cards.size} cards — study, then test ✍️",
-                        fontSize = 12.sp,
-                        color = MaterialTheme.colorScheme.primary
-                    )
-                    Spacer(Modifier.height(8.dp))
-                    lesson.cards.forEach { c ->
-                        Card(shape = RoundedCornerShape(12.dp), modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp)) {
-                            Row(Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
-                                Column(Modifier.weight(1f)) {
-                                    Text(c.front, fontSize = 16.sp, fontWeight = FontWeight.Bold)
-                                    if (c.reading.isNotBlank()) Text(c.reading, fontSize = 13.sp)
-                                    Text(c.back, fontSize = 14.sp)
-                                    if (c.note.isNotBlank()) Text(c.note, fontSize = 12.sp, color = MaterialTheme.colorScheme.secondary)
-                                }
-                                if (speakingKey == c.front) {
-                                    CircularProgressIndicator(modifier = Modifier.size(24.dp), strokeWidth = 2.dp)
-                                } else {
-                                    IconButton(onClick = { onSpeak(c.reading.ifBlank { c.front }, c.front) }) {
-                                        Icon(Icons.Default.PlayArrow, contentDescription = "Hear pronunciation")
-                                    }
-                                }
-                            }
-                        }
-                    }
-                    Spacer(Modifier.height(8.dp))
-                    Button(
-                        onClick = { onTakeTest(lesson.id) },
-                        modifier = Modifier.fillMaxWidth(),
-                        shape = RoundedCornerShape(16.dp)
-                    ) { Text("Take Test $num ✍️ (100% to advance)") }
-                }
-                else -> {
-                    Text("No lessons at this level yet.", fontSize = 13.sp)
-                    TextButton(onClick = onRetry) { Text("Reload") }
-                }
+            lesson != null -> {
+                val num = progress?.current_lesson ?: 1
+                val total = progress?.lessons_total ?: 0
+                NavCard(
+                    title = if (total > 0) "📖 Lesson $num of $total" else "📖 ${lesson.title}",
+                    subtitle = "${lesson.title} · ${lesson.cards.size} cards",
+                    onClick = { onOpenLesson(lesson.id) }
+                )
+                NavCard(
+                    title = "✍️ Test $num",
+                    subtitle = "Type every answer · 100% to advance",
+                    onClick = { onTakeTest(lesson.id) }
+                )
             }
+            else -> {
+                Text(
+                    "No lessons at this level yet.",
+                    fontSize = 13.sp,
+                    color = MaterialTheme.colorScheme.secondary
+                )
+            }
+        }
+    }
+}
+
+/** Compact tappable row-card, same pattern as the kana deck list. */
+@Composable
+private fun NavCard(title: String, subtitle: String, onClick: () -> Unit) {
+    Card(
+        modifier = Modifier.fillMaxWidth().clickable { onClick() },
+        shape = RoundedCornerShape(16.dp)
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(14.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text(title, fontSize = 16.sp, fontWeight = FontWeight.Bold)
+                Text(subtitle, fontSize = 13.sp, color = MaterialTheme.colorScheme.primary)
+            }
+            Icon(Icons.AutoMirrored.Filled.ArrowForward, contentDescription = "Open")
         }
     }
 }
@@ -451,94 +418,6 @@ private fun LevelProgressionCard(
                 )
             } else {
                 Text("Current: $currentLevel", fontSize = 13.sp, color = MaterialTheme.colorScheme.primary)
-            }
-        }
-    }
-}
-
-@Composable
-private fun LearnPoolCard(
-    pool: LearnSessionResponse?,
-    loading: Boolean,
-    error: String?,
-    xpEarned: Int?,
-    currentLevel: String,
-    nextLevel: String?,
-    hasProgress: Boolean,
-    isComplete: Boolean,
-    onReload: () -> Unit,
-    onMarkLearned: (List<com.aiko.lingo.data.remote.LearnItemDto>) -> Unit,
-    onLevelUp: (String) -> Unit,
-    onDismissXp: () -> Unit
-) {
-    Card(shape = RoundedCornerShape(20.dp), modifier = Modifier.fillMaxWidth()) {
-        Column(Modifier.padding(16.dp)) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Text("New vocab · $currentLevel", fontWeight = FontWeight.Bold, fontSize = 15.sp, modifier = Modifier.weight(1f))
-                if (loading) CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
-            }
-            if (xpEarned != null) {
-                Spacer(Modifier.height(8.dp))
-                Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer)) {
-                    Row(Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
-                        Text("+$xpEarned XP earned! 🎉", modifier = Modifier.weight(1f), fontWeight = FontWeight.Bold)
-                        TextButton(onClick = onDismissXp) { Text("OK") }
-                    }
-                }
-            }
-            Spacer(Modifier.height(8.dp))
-            when {
-                loading && pool == null -> Text("Loading new vocab…", fontSize = 13.sp)
-                error != null && pool == null -> {
-                    Text("Error: $error", fontSize = 13.sp)
-                    Button(onClick = onReload, modifier = Modifier.padding(top = 8.dp)) { Text("Retry") }
-                }
-                pool == null || pool.items.isEmpty() -> {
-                    if ((pool?.pending_in_pool ?: 0) == 0) {
-                        if (isComplete && hasProgress) {
-                            Text("All caught up at $currentLevel! ✨", fontWeight = FontWeight.Bold)
-                            if (nextLevel != null) {
-                                Text("Earn $nextLevel by leveling up:", fontSize = 13.sp)
-                                Spacer(Modifier.height(8.dp))
-                                Button(onClick = { onLevelUp(nextLevel) }) { Text("Level up → $nextLevel") }
-                            } else {
-                                Text("You reached N1 — top rank! 🏆", fontSize = 13.sp)
-                            }
-                        } else {
-                            Text("Preparing $currentLevel words… ⏳", fontWeight = FontWeight.Bold)
-                            Text("No waiting on LLM — pool refills in background. Tap reload.", fontSize = 13.sp)
-                            Button(onClick = onReload, modifier = Modifier.padding(top = 8.dp), enabled = !loading) { Text("Reload") }
-                        }
-                    } else {
-                        Text("${pool?.pending_in_pool ?: 0} cards pending — tap reload.", fontSize = 13.sp)
-                        Button(onClick = onReload, modifier = Modifier.padding(top = 8.dp)) { Text("Load more") }
-                    }
-                }
-                else -> {
-                    Text("${pool.items.size} new · ${pool.pending_in_pool} pending in pool", fontSize = 12.sp, color = MaterialTheme.colorScheme.primary)
-                    Spacer(Modifier.height(8.dp))
-                    // Every served card is shown -- "Got it" marks exactly
-                    // what you see, nothing hidden.
-                    pool.items.forEach { item ->
-                        Column(Modifier.padding(vertical = 6.dp)) {
-                            Text(item.front, fontWeight = FontWeight.Bold, fontSize = 16.sp)
-                            if (item.reading.isNotBlank() && item.reading != item.front) {
-                                Text(item.reading, fontSize = 13.sp)
-                            }
-                            Text(item.back, fontSize = 15.sp)
-                        }
-                        HorizontalDivider()
-                    }
-                    Spacer(Modifier.height(8.dp))
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        Button(
-                            onClick = { onMarkLearned(pool.items) },
-                            enabled = !loading,
-                            modifier = Modifier.weight(1f)
-                        ) { Text("Got it +XP") }
-                        OutlinedButton(onClick = onReload, enabled = !loading) { Text("↻") }
-                    }
-                }
             }
         }
     }
