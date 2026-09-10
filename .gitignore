@@ -1,3 +1,45 @@
+# Gradle build outputs — regenerated on every build
 .gradle/
 build/
+app/build/
+
+# Local SDK path (absolute, machine-specific) — never commit
 local.properties
+
+# Android Studio — user-specific, machine-specific
+.idea/workspace.xml
+.idea/shelf/
+.idea/caches/
+.idea/deploymentTargetSelector.xml
+.idea/deviceManager.xml
+.idea/navEditor.xml
+.idea/assetWizardSettings.xml
+*.iml
+
+# Kotlin daemon working files and crash logs
+.kotlin/
+
+# JVM crash / replay logs
+hs_err_pid*.log
+replay_pid*.log
+
+# Local sandbox probe file — not part of the app
+sandbox_check.txt
+
+# Release signing keys — never commit
+*.jks
+*.keystore
+
+# OS junk
+.DS_Store
+Thumbs.db
+
+# Native build / profiling outputs
+.externalNativeBuild/
+.cxx/
+captures/
+*.hprof
+
+# Packaged outputs (produced by assembleDebug/assembleRelease)
+*.apk
+*.aab
