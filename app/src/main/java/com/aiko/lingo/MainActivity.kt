@@ -304,7 +304,7 @@ fun MainMenu(
             modifier = Modifier.padding(bottom = 24.dp)
         ) {
             Image(
-                painter = painterResource(R.drawable.aiko_square),
+                painter = painterResource(R.drawable.ic_launcher),
                 contentDescription = "Aiko",
                 modifier = Modifier.size(120.dp),
                 contentScale = ContentScale.Crop
