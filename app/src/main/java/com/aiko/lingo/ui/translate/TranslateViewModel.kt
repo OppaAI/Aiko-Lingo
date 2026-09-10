@@ -48,6 +48,7 @@ class TranslateViewModel(private val apiService: AikoApiService) : ViewModel() {
     }
 
     private var mediaPlayer: MediaPlayer? = null
+    private var playToken = 0
     private val isAudioLoading = MutableStateFlow<String?>(null)
     val audioLoading = isAudioLoading.asStateFlow()
 
@@ -59,6 +60,7 @@ class TranslateViewModel(private val apiService: AikoApiService) : ViewModel() {
     }
 
     fun stopAudio() {
+        playToken++
         try {
             mediaPlayer?.stop()
             mediaPlayer?.release()
@@ -73,6 +75,7 @@ class TranslateViewModel(private val apiService: AikoApiService) : ViewModel() {
         if (text.isBlank() && existingUrl.isNullOrBlank()) return
 
         stopAudio()
+        val token = ++playToken
 
         viewModelScope.launch {
             var currentPlayer: MediaPlayer? = null
@@ -89,10 +92,18 @@ class TranslateViewModel(private val apiService: AikoApiService) : ViewModel() {
                             .build()
                     )
                     prepareAsync()
-                    setOnPreparedListener {
+                    setOnPreparedListener { player ->
+                        if (token != playToken) {
+                            try {
+                                player?.release()
+                            } catch (e: Exception) {
+                                Log.e("Lingo", "Error releasing superseded player", e)
+                            }
+                            return@setOnPreparedListener
+                        }
                         try {
                             isAudioLoading.value = null
-                            start()
+                            player?.start()
                         } catch (e: Exception) {
                             Log.e("Lingo", "Failed to start audio playback", e)
                             isAudioLoading.value = null
@@ -123,6 +134,14 @@ class TranslateViewModel(private val apiService: AikoApiService) : ViewModel() {
                         }
                         true
                     }
+                }
+                if (token != playToken) {
+                    try {
+                        currentPlayer?.release()
+                    } catch (e: Exception) {
+                        Log.e("Lingo", "Error releasing superseded player", e)
+                    }
+                    return@launch
                 }
                 mediaPlayer = currentPlayer
             } catch (e: Exception) {

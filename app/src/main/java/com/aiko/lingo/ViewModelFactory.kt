@@ -11,11 +11,13 @@ import com.aiko.lingo.ui.leaderboard.LeaderboardViewModel
 import com.aiko.lingo.ui.vocab.VocabViewModel
 import com.aiko.lingo.ui.practice.PracticeViewModel
 import com.aiko.lingo.ui.courses.CoursesViewModel
+import com.aiko.lingo.ui.test.LessonTestViewModel
 
 class ViewModelFactory(
     private val apiService: AikoApiService,
     private val streamingApi: AikoApiService = apiService,
     private val coursesMode: String = "courses",
+    private val testTrack: String = "vocab",
 ) : ViewModelProvider.Factory {
     @Suppress("UNCHECKED_CAST")
     override fun <T : ViewModel> create(modelClass: Class<T>): T {
@@ -36,6 +38,8 @@ class ViewModelFactory(
                 PracticeViewModel(apiService) as T
             modelClass.isAssignableFrom(CoursesViewModel::class.java) ->
                 CoursesViewModel(apiService, coursesMode) as T
+            modelClass.isAssignableFrom(LessonTestViewModel::class.java) ->
+                LessonTestViewModel(apiService, testTrack) as T
             else -> throw IllegalArgumentException("Unknown ViewModel class")
         }
     }

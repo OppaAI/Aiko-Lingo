@@ -19,8 +19,10 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.activity.enableEdgeToEdge
+import androidx.navigation.NavHostController
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
@@ -41,6 +43,8 @@ import com.aiko.lingo.ui.practice.PracticeScreen
 import com.aiko.lingo.ui.practice.PracticeViewModel
 import com.aiko.lingo.ui.courses.CoursesScreen
 import com.aiko.lingo.ui.courses.CoursesViewModel
+import com.aiko.lingo.ui.test.LessonTestScreen
+import com.aiko.lingo.ui.test.LessonTestViewModel
 import com.aiko.lingo.ui.theme.*
 import retrofit2.converter.kotlinx.serialization.asConverterFactory
 import kotlinx.serialization.json.Json
@@ -87,10 +91,33 @@ class MainActivity : ComponentActivity() {
     }
 }
 
+private fun refreshVocab(navController: NavHostController, factory: ViewModelFactory) {
+    // Plain ViewModelProvider (not the @Composable helper) so this can run
+    // from a click callback. The VM already exists; the factory is only a
+    // fallback and is not invoked.
+    try {
+        val entry = navController.getBackStackEntry("vocab")
+        ViewModelProvider(entry, factory)[VocabViewModel::class.java].onTestPassed()
+    } catch (e: Exception) {
+        android.util.Log.w("Lingo", "Vocab refresh after test failed", e)
+    }
+}
+
+private fun refreshGrammar(navController: NavHostController, apiService: AikoApiService) {
+    try {
+        val entry = navController.getBackStackEntry("grammar")
+        val grammarFactory = ViewModelFactory(apiService, coursesMode = "grammar")
+        ViewModelProvider(entry, grammarFactory)[CoursesViewModel::class.java].onTestPassed()
+    } catch (e: Exception) {
+        android.util.Log.w("Lingo", "Grammar refresh after test failed", e)
+    }
+}
+
 @Composable
 private fun AikoLingoApp(apiService: AikoApiService, streamingApi: AikoApiService, onToggleTheme: () -> Unit) {
     val navController = rememberNavController()
-    val factory = ViewModelFactory(apiService, streamingApi)
+    // Remember so theme toggles (recomposition) don't rebuild it.
+    val factory = remember(apiService, streamingApi) { ViewModelFactory(apiService, streamingApi) }
 
     NavHost(navController = navController, startDestination = "menu") {
         composable("menu") {
@@ -137,11 +164,80 @@ private fun AikoLingoApp(apiService: AikoApiService, streamingApi: AikoApiServic
         }
         composable("vocab") {
             val vm: VocabViewModel = viewModel(factory = factory)
-            VocabScreen(vm, onBack = { navController.popBackStack() })
+            VocabScreen(
+                vm,
+                onBack = { navController.popBackStack() },
+                onNavigateToTest = { deckId -> navController.navigate("courseTest/$deckId") },
+                onNavigateToFinal = { navController.navigate("courseFinalTest") }
+            )
+        }
+        composable("courseTest/{deckId}") { backStackEntry ->
+            val deckId = backStackEntry.arguments?.getString("deckId").orEmpty()
+            val vm: LessonTestViewModel = viewModel(
+                factory = ViewModelFactory(apiService, testTrack = "vocab")
+            )
+            LaunchedEffect(deckId) { vm.loadLessonTest(deckId) }
+            LessonTestScreen(
+                vm,
+                onBack = { navController.popBackStack() },
+                onPassed = {
+                    refreshVocab(navController, factory)
+                    navController.popBackStack()
+                }
+            )
+        }
+        composable("courseFinalTest") {
+            val vm: LessonTestViewModel = viewModel(
+                factory = ViewModelFactory(apiService, testTrack = "vocab")
+            )
+            LaunchedEffect(Unit) { vm.loadFinalTest() }
+            LessonTestScreen(
+                vm,
+                onBack = { navController.popBackStack() },
+                onPassed = {
+                    refreshVocab(navController, factory)
+                    navController.popBackStack()
+                }
+            )
         }
         composable("grammar") {
             val vm: CoursesViewModel = viewModel(factory = ViewModelFactory(apiService, coursesMode = "grammar"))
-            CoursesScreen(vm, title = "Grammar ✏️", onBack = { navController.popBackStack() })
+            CoursesScreen(
+                vm,
+                title = "Grammar ✏️",
+                onBack = { navController.popBackStack() },
+                onNavigateToTest = { deckId -> navController.navigate("grammarTest/$deckId") },
+                onNavigateToFinal = { navController.navigate("grammarFinalTest") }
+            )
+        }
+        composable("grammarTest/{deckId}") { backStackEntry ->
+            val deckId = backStackEntry.arguments?.getString("deckId").orEmpty()
+            val vm: LessonTestViewModel = viewModel(
+                factory = ViewModelFactory(apiService, testTrack = "grammar")
+            )
+            LaunchedEffect(deckId) { vm.loadLessonTest(deckId) }
+            LessonTestScreen(
+                vm,
+                onBack = { navController.popBackStack() },
+                onPassed = {
+                    refreshGrammar(navController, apiService)
+                    navController.popBackStack()
+                }
+            )
+        }
+        composable("grammarFinalTest") {
+            val vm: LessonTestViewModel = viewModel(
+                factory = ViewModelFactory(apiService, testTrack = "grammar")
+            )
+            LaunchedEffect(Unit) { vm.loadFinalTest() }
+            LessonTestScreen(
+                vm,
+                onBack = { navController.popBackStack() },
+                onPassed = {
+                    refreshGrammar(navController, apiService)
+                    navController.popBackStack()
+                }
+            )
         }
         composable("leaderboard") {
             val vm: LeaderboardViewModel = viewModel(factory = factory)

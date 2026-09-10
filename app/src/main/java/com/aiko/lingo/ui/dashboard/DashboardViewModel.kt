@@ -77,6 +77,7 @@ class DashboardViewModel(private val apiService: AikoApiService) : ViewModel() {
     }
 
     private var mediaPlayer: MediaPlayer? = null
+    private var playToken = 0
 
     // Compact speak button for the Word of the Day card -- same pattern as
     // ConversationViewModel.playAudio: prefer the server-provided audioUrl,
@@ -84,6 +85,7 @@ class DashboardViewModel(private val apiService: AikoApiService) : ViewModel() {
     fun playWord(text: String, existingUrl: String? = null) {
         if (text.isBlank() && existingUrl.isNullOrBlank()) return
         stopAudio()
+        val token = ++playToken
         viewModelScope.launch {
             var currentPlayer: MediaPlayer? = null
             try {
@@ -99,28 +101,42 @@ class DashboardViewModel(private val apiService: AikoApiService) : ViewModel() {
                     prepareAsync()
                     setOnPreparedListener { try { start() } catch (e: Exception) {
                         Log.e("Dashboard", "Failed to start word audio", e) } }
-                    setOnCompletionListener { try { release() } catch (e: Exception) {
+                    setOnCompletionListener { mp ->
+                        try { mp?.release() } catch (e: Exception) {
                         Log.e("Dashboard", "Error releasing word player", e) }
-                        mediaPlayer = null }
+                        if (mediaPlayer === mp) {
+                            mediaPlayer = null
+                        }
+                    }
                     setOnErrorListener { mp, what, extra ->
                         Log.e("Dashboard", "Word audio error: what=$what, extra=$extra")
                         try { mp?.release() } catch (e: Exception) {
                             Log.e("Dashboard", "Error releasing word player", e) }
-                        mediaPlayer = null
+                        if (mediaPlayer === mp) {
+                            mediaPlayer = null
+                        }
                         true
                     }
+                }
+                if (token != playToken) {
+                    try { currentPlayer?.release() } catch (e: Exception) {
+                        Log.e("Dashboard", "Error releasing superseded player", e) }
+                    return@launch
                 }
                 mediaPlayer = currentPlayer
             } catch (e: Exception) {
                 Log.e("Dashboard", "Word audio playback error", e)
                 try { currentPlayer?.release() } catch (re: Exception) {
                     Log.e("Dashboard", "Error releasing word player", re) }
-                mediaPlayer = null
+                if (mediaPlayer === currentPlayer) {
+                    mediaPlayer = null
+                }
             }
         }
     }
 
     fun stopAudio() {
+        playToken++
         try {
             mediaPlayer?.stop()
             mediaPlayer?.release()

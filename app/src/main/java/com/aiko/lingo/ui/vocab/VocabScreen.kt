@@ -21,11 +21,14 @@ import com.aiko.lingo.data.model.LessonDeck
 import com.aiko.lingo.data.remote.CourseDetail
 import com.aiko.lingo.data.remote.LearnSessionResponse
 import com.aiko.lingo.data.remote.LearnStatusResponse
+import com.aiko.lingo.data.remote.LessonProgressDto
 
 @Composable
 fun VocabScreen(
     viewModel: VocabViewModel,
-    onBack: () -> Unit
+    onBack: () -> Unit,
+    onNavigateToTest: (String) -> Unit = {},
+    onNavigateToFinal: () -> Unit = {}
 ) {
     val decks by viewModel.decks.collectAsState()
     val detail by viewModel.detail.collectAsState()
@@ -33,11 +36,9 @@ fun VocabScreen(
     val detailLoading by viewModel.detailLoading.collectAsState()
     val listError by viewModel.listError.collectAsState()
     val detailError by viewModel.detailError.collectAsState()
-    val courses by viewModel.courses.collectAsState()
     val courseDetail by viewModel.courseDetail.collectAsState()
     val courseDetailLoading by viewModel.courseDetailLoading.collectAsState()
     val courseDetailError by viewModel.courseDetailError.collectAsState()
-    val coursesError by viewModel.coursesError.collectAsState()
     val speakingKey by viewModel.speakingKey.collectAsState()
     val currentLevel by viewModel.currentLevel.collectAsState()
     val levels by viewModel.levels.collectAsState()
@@ -48,6 +49,10 @@ fun VocabScreen(
     val poolLoading by viewModel.poolLoading.collectAsState()
     val poolError by viewModel.poolError.collectAsState()
     val lastXpEarned by viewModel.lastXpEarned.collectAsState()
+    val currentLesson by viewModel.currentLesson.collectAsState()
+    val lessonProgress by viewModel.lessonProgress.collectAsState()
+    val lessonLoading by viewModel.lessonLoading.collectAsState()
+    val lessonError by viewModel.lessonError.collectAsState()
     val isDetail = detail != null || detailLoading || detailError != null ||
         courseDetail != null || courseDetailLoading || courseDetailError != null
 
@@ -103,7 +108,13 @@ fun VocabScreen(
                     }
                     Spacer(Modifier.height(8.dp))
                 }
-                FlashcardViewer(deck = detail!!, onSpeak = { viewModel.playCard(it) })
+                FlashcardViewer(
+                    deck = detail!!,
+                    onSpeak = { viewModel.playCard(it) },
+                    // Kana decks drill 10 random cards at a time, not all 46
+                    // in sequence; Words & Phrases shows its full 10.
+                    shuffleTake = if (detail!!.kind == "kana") 10 else 0
+                )
             }
             detailLoading -> {
                 Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
@@ -224,53 +235,115 @@ fun VocabScreen(
                             modifier = Modifier.padding(top = 4.dp)
                         )
                     }
-                    if (coursesError != null && courses.isEmpty()) {
-                        item {
-                            Card(
-                                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.errorContainer),
-                                modifier = Modifier.fillMaxWidth()
-                            ) {
-                                Column(Modifier.padding(12.dp)) {
-                                    Text("Couldn't load courses: $coursesError")
-                                    TextButton(onClick = { viewModel.loadCourses() }) { Text("Retry") }
+                    item {
+                        CurrentLessonCard(
+                            lesson = currentLesson,
+                            progress = lessonProgress,
+                            loading = lessonLoading,
+                            error = lessonError,
+                            speakingKey = speakingKey,
+                            onRetry = { viewModel.loadCurrentLesson() },
+                            onSpeak = { text, key -> viewModel.playCard(text, key) },
+                            onTakeTest = { onNavigateToTest(it) },
+                            onFinalTest = onNavigateToFinal
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun CurrentLessonCard(
+    lesson: CourseDetail?,
+    progress: LessonProgressDto?,
+    loading: Boolean,
+    error: String?,
+    speakingKey: String?,
+    onRetry: () -> Unit,
+    onSpeak: (String, String) -> Unit,
+    onTakeTest: (String) -> Unit,
+    onFinalTest: () -> Unit
+) {
+    Card(shape = RoundedCornerShape(20.dp), modifier = Modifier.fillMaxWidth()) {
+        Column(Modifier.padding(16.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    "Current lesson 📖",
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 15.sp,
+                    modifier = Modifier.weight(1f)
+                )
+                if (loading) CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
+            }
+            Spacer(Modifier.height(8.dp))
+            when {
+                loading && lesson == null && progress == null -> {
+                    Text("Loading your lesson…", fontSize = 13.sp)
+                }
+                error != null && lesson == null && progress == null -> {
+                    Text("Couldn't load lesson: $error", fontSize = 13.sp)
+                    Button(onClick = onRetry, modifier = Modifier.padding(top = 8.dp)) { Text("Retry") }
+                }
+                progress?.final_unlocked == true -> {
+                    val order = VocabViewModel.JLPT_ORDER
+                    val idx = order.indexOf(progress.level)
+                    val next = if (idx >= 0 && idx + 1 < order.size) order[idx + 1] else null
+                    Text("All ${progress.lessons_total} lessons cleared! ✨", fontWeight = FontWeight.Bold)
+                    Text(
+                        if (next != null) "Final: 100 random questions · 100% unlocks $next 🎯"
+                        else "Final: 100 random questions · 100% for full mastery 🎯",
+                        fontSize = 13.sp
+                    )
+                    Spacer(Modifier.height(8.dp))
+                    Button(onClick = onFinalTest, modifier = Modifier.fillMaxWidth()) {
+                        Text("Take ${progress.level} Final Test 🏆")
+                    }
+                }
+                lesson != null -> {
+                    val num = progress?.current_lesson ?: 1
+                    val total = progress?.lessons_total ?: 0
+                    Text(
+                        if (total > 0) "Lesson $num of $total · ${lesson.title}" else lesson.title,
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 15.sp
+                    )
+                    Text(
+                        "${lesson.level} · ${lesson.cards.size} cards — study, then test ✍️",
+                        fontSize = 12.sp,
+                        color = MaterialTheme.colorScheme.primary
+                    )
+                    Spacer(Modifier.height(8.dp))
+                    lesson.cards.forEach { c ->
+                        Card(shape = RoundedCornerShape(12.dp), modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp)) {
+                            Row(Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
+                                Column(Modifier.weight(1f)) {
+                                    Text(c.front, fontSize = 16.sp, fontWeight = FontWeight.Bold)
+                                    if (c.reading.isNotBlank()) Text(c.reading, fontSize = 13.sp)
+                                    Text(c.back, fontSize = 14.sp)
+                                    if (c.note.isNotBlank()) Text(c.note, fontSize = 12.sp, color = MaterialTheme.colorScheme.secondary)
+                                }
+                                if (speakingKey == c.front) {
+                                    CircularProgressIndicator(modifier = Modifier.size(24.dp), strokeWidth = 2.dp)
+                                } else {
+                                    IconButton(onClick = { onSpeak(c.reading.ifBlank { c.front }, c.front) }) {
+                                        Icon(Icons.Default.PlayArrow, contentDescription = "Hear pronunciation")
+                                    }
                                 }
                             }
                         }
                     }
-                    if (courses.isEmpty() && coursesError == null) {
-                        item {
-                            Text(
-                                "No course decks yet — check back soon!",
-                                fontSize = 13.sp,
-                                color = MaterialTheme.colorScheme.secondary
-                            )
-                        }
-                    }
-                    items(courses, key = { it.id }) { course ->
-                        Card(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clickable { viewModel.openCourse(course.id) },
-                            shape = RoundedCornerShape(16.dp)
-                        ) {
-                            Row(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(14.dp),
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Column(modifier = Modifier.weight(1f)) {
-                                    Text(course.title, fontSize = 15.sp, fontWeight = FontWeight.Bold)
-                                    Text(
-                                        "${course.level} · ${course.card_count} cards",
-                                        fontSize = 13.sp,
-                                        color = MaterialTheme.colorScheme.primary
-                                    )
-                                }
-                                Icon(Icons.AutoMirrored.Filled.ArrowForward, contentDescription = "Open course")
-                            }
-                        }
-                    }
+                    Spacer(Modifier.height(8.dp))
+                    Button(
+                        onClick = { onTakeTest(lesson.id) },
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(16.dp)
+                    ) { Text("Take Test $num ✍️ (100% to advance)") }
+                }
+                else -> {
+                    Text("No lessons at this level yet.", fontSize = 13.sp)
+                    TextButton(onClick = onRetry) { Text("Reload") }
                 }
             }
         }
@@ -444,7 +517,9 @@ private fun LearnPoolCard(
                 else -> {
                     Text("${pool.items.size} new · ${pool.pending_in_pool} pending in pool", fontSize = 12.sp, color = MaterialTheme.colorScheme.primary)
                     Spacer(Modifier.height(8.dp))
-                    pool.items.take(5).forEach { item ->
+                    // Every served card is shown -- "Got it" marks exactly
+                    // what you see, nothing hidden.
+                    pool.items.forEach { item ->
                         Column(Modifier.padding(vertical = 6.dp)) {
                             Text(item.front, fontWeight = FontWeight.Bold, fontSize = 16.sp)
                             if (item.reading.isNotBlank() && item.reading != item.front) {
@@ -470,10 +545,25 @@ private fun LearnPoolCard(
 }
 
 @Composable
-private fun FlashcardViewer(deck: LessonDeck, onSpeak: (String) -> Unit) {
-    var index by remember(deck.id) { mutableIntStateOf(0) }
-    var flipped by remember(deck.id, index) { mutableStateOf(false) }
-    val card = deck.cards.getOrNull(index)
+private fun FlashcardViewer(
+    deck: LessonDeck,
+    onSpeak: (String) -> Unit,
+    // When > 0 and the deck is bigger, drill a random subset (kana: 10 of
+    // 46) with a reshuffle button instead of marching through all cards.
+    shuffleTake: Int = 0
+) {
+    var shuffleSeed by remember(deck.id) { mutableIntStateOf(0) }
+    val viewCards = remember(deck.id, shuffleSeed) {
+        if (shuffleTake > 0 && deck.cards.size > shuffleTake) {
+            deck.cards.shuffled(kotlin.random.Random(shuffleSeed)).take(shuffleTake)
+        } else {
+            deck.cards
+        }
+    }
+    var index by remember(deck.id, shuffleSeed) { mutableIntStateOf(0) }
+    var flipped by remember(deck.id, shuffleSeed, index) { mutableStateOf(false) }
+    val card = viewCards.getOrNull(index)
+    val shuffled = shuffleTake > 0 && deck.cards.size > shuffleTake
 
     if (card == null) {
         Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
@@ -486,11 +576,22 @@ private fun FlashcardViewer(deck: LessonDeck, onSpeak: (String) -> Unit) {
         modifier = Modifier.fillMaxSize(),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        Text(
-            "${index + 1} / ${deck.cards.size}",
-            style = MaterialTheme.typography.labelLarge,
-            color = MaterialTheme.colorScheme.primary
-        )
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(
+                "${index + 1} / ${viewCards.size}",
+                style = MaterialTheme.typography.labelLarge,
+                color = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.weight(1f),
+                textAlign = TextAlign.Center
+            )
+            if (shuffled) {
+                TextButton(onClick = {
+                    shuffleSeed++
+                    index = 0
+                    flipped = false
+                }) { Text("Shuffle ↻") }
+            }
+        }
         Spacer(modifier = Modifier.height(12.dp))
 
         Card(
@@ -546,8 +647,8 @@ private fun FlashcardViewer(deck: LessonDeck, onSpeak: (String) -> Unit) {
                 Icon(Icons.Default.PlayArrow, contentDescription = "Speak")
             }
             Button(
-                onClick = { if (index < deck.cards.size - 1) index++ },
-                enabled = index < deck.cards.size - 1
+                onClick = { if (index < viewCards.size - 1) index++ },
+                enabled = index < viewCards.size - 1
             ) {
                 Text("Next")
             }

@@ -10,9 +10,11 @@ import com.aiko.lingo.data.model.LessonDeckMeta
 import com.aiko.lingo.data.remote.AikoApiService
 import com.aiko.lingo.data.remote.CourseDetail
 import com.aiko.lingo.data.remote.CourseMeta
+import com.aiko.lingo.data.remote.CurrentLessonResponse
 import com.aiko.lingo.data.remote.LearnItemDto
 import com.aiko.lingo.data.remote.LearnSessionResponse
 import com.aiko.lingo.data.remote.LearnStatusResponse
+import com.aiko.lingo.data.remote.LessonProgressDto
 import com.aiko.lingo.data.remote.LingoCache
 import com.aiko.lingo.data.remote.MarkLearnedRequest
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -67,6 +69,19 @@ class VocabViewModel(private val apiService: AikoApiService) : ViewModel() {
 
     private var pendingCourseId: String? = null
 
+    // --- Current lesson progression (one lesson at a time + tests) ---
+    private val _currentLesson = MutableStateFlow<CourseDetail?>(null)
+    val currentLesson = _currentLesson.asStateFlow()
+
+    private val _lessonProgress = MutableStateFlow<LessonProgressDto?>(null)
+    val lessonProgress = _lessonProgress.asStateFlow()
+
+    private val _lessonLoading = MutableStateFlow(false)
+    val lessonLoading = _lessonLoading.asStateFlow()
+
+    private val _lessonError = MutableStateFlow<String?>(null)
+    val lessonError = _lessonError.asStateFlow()
+
     // --- JLPT level progression (N5 -> N1) ---
     private val _currentLevel = MutableStateFlow("N5")
     val currentLevel = _currentLevel.asStateFlow()
@@ -106,11 +121,16 @@ class VocabViewModel(private val apiService: AikoApiService) : ViewModel() {
             if (it.level.isNotBlank()) _currentLevel.value = it.level
         }
         LingoCache.get<LearnSessionResponse>("vocab_pool", 30_000)?.let { _learnPool.value = it }
+        LingoCache.get<CurrentLessonResponse>("vocab_current", 60_000)?.let {
+            _currentLesson.value = it.lesson
+            _lessonProgress.value = it.progress
+        }
         if (_decks.value.isNotEmpty() || _learnPool.value != null) {
             _listLoading.value = false
         }
         loadDecks()
         loadCourses()
+        loadCurrentLesson()
         refreshProgress()
     }
 
@@ -325,6 +345,35 @@ class VocabViewModel(private val apiService: AikoApiService) : ViewModel() {
         pendingCourseId?.let { openCourse(it) }
     }
 
+    /** One lesson at a time: the server tracks which lesson is current. */
+    fun loadCurrentLesson() {
+        viewModelScope.launch {
+            if (_currentLesson.value == null && _lessonProgress.value == null) {
+                _lessonLoading.value = true
+            }
+            _lessonError.value = null
+            try {
+                val res = apiService.getCurrentCourse()
+                _currentLesson.value = res.lesson
+                _lessonProgress.value = res.progress
+                LingoCache.put("vocab_current", res)
+            } catch (e: Exception) {
+                Log.e("Vocab", "Failed to fetch current lesson", e)
+                if (_currentLesson.value == null && _lessonProgress.value == null) {
+                    _lessonError.value = e.message ?: "Failed to load lesson"
+                }
+            }
+            _lessonLoading.value = false
+        }
+    }
+
+    /** Called after a lesson/final test passes: progression + level may move. */
+    fun onTestPassed() {
+        LingoCache.invalidate("vocab_current", "vocab_status", "vocab_pool", "vocab_level")
+        loadCurrentLesson()
+        refreshProgress()
+    }
+
     fun backToList() {
         _detail.value = null
         _detailError.value = null
@@ -375,20 +424,29 @@ class VocabViewModel(private val apiService: AikoApiService) : ViewModel() {
                             if (token == playToken) _speakingKey.value = null
                         }
                     }
-                    setOnCompletionListener {
-                        try { release() } catch (e: Exception) {
+                    setOnCompletionListener { mp ->
+                        try { mp?.release() } catch (e: Exception) {
                             Log.e("Vocab", "Error releasing card player", e) }
-                        mediaPlayer = null
+                        if (mediaPlayer === mp) {
+                            mediaPlayer = null
+                        }
                         if (token == playToken) _speakingKey.value = null
                     }
                     setOnErrorListener { mp, what, extra ->
                         Log.e("Vocab", "Card audio error: what=$what, extra=$extra")
                         try { mp?.release() } catch (e: Exception) {
                             Log.e("Vocab", "Error releasing card player", e) }
-                        mediaPlayer = null
+                        if (mediaPlayer === mp) {
+                            mediaPlayer = null
+                        }
                         if (token == playToken) _speakingKey.value = null
                         true
                     }
+                }
+                if (token != playToken) {
+                    try { currentPlayer?.release() } catch (e: Exception) {
+                        Log.e("Vocab", "Error releasing superseded player", e) }
+                    return@launch
                 }
                 mediaPlayer = currentPlayer
             } catch (e: Exception) {

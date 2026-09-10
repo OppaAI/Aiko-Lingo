@@ -75,12 +75,31 @@ fun LeaderboardScreen(
                     LeaderboardContent(state.leaderboard)
                 }
                 is LeaderboardUiState.Error -> {
-                    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                    Column(
+                        modifier = Modifier.fillMaxSize(),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.Center
+                    ) {
                         Text(
                             "Oops! Leaderboard is missing.",
                             color = Color.Red,
                             fontWeight = FontWeight.Bold
                         )
+                        Text(
+                            state.message,
+                            color = Color.Gray,
+                            fontSize = 13.sp,
+                            textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                            modifier = Modifier.padding(top = 4.dp, start = 24.dp, end = 24.dp)
+                        )
+                        Spacer(modifier = Modifier.height(16.dp))
+                        Button(
+                            onClick = { viewModel.fetchLeaderboard() },
+                            shape = RoundedCornerShape(16.dp),
+                            colors = ButtonDefaults.buttonColors(containerColor = PastelYellowDark)
+                        ) {
+                            Text("Retry")
+                        }
                     }
                 }
             }

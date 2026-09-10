@@ -26,6 +26,7 @@ import com.aiko.lingo.data.model.Toast
 import com.aiko.lingo.data.remote.AikoApiService
 import android.media.AudioAttributes
 import android.media.MediaPlayer
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -80,6 +81,9 @@ class ConversationViewModel(
             try {
                 val responseBody = streamingApi.startConversationStream(ConversationStartRequest(level))
                 handleStream(responseBody)
+            } catch (e: CancellationException) {
+                // Superseded by a newer start()/respond() -- not an error.
+                throw e
             } catch (e: Exception) {
                 Log.e("Lingo", "Start failed", e)
                 _uiState.value = ConversationUiState.Error(e.message ?: "Failed to start")
@@ -117,22 +121,29 @@ class ConversationViewModel(
                                 }
                                 "error" -> {
                                     withContext(Dispatchers.Main) {
+                                        _karaokeText.value = ""
                                         _uiState.value = ConversationUiState.Error(chunk.message ?: "Stream error")
                                     }
                                 }
                             }
+                        } catch (e: CancellationException) {
+                            throw e
                         } catch (e: Exception) {
                             Log.e("Lingo", "Stream parse error: ${e.message} for line: $line", e)
                             withContext(Dispatchers.Main) {
+                                _karaokeText.value = ""
                                 _uiState.value = ConversationUiState.Error("Failed to parse response: ${e.message}")
                             }
                             return@useLines
                         }
                     }
                 }
+            } catch (e: CancellationException) {
+                throw e
             } catch (e: Exception) {
                 Log.e("Lingo", "Stream reading failed", e)
                 withContext(Dispatchers.Main) {
+                    _karaokeText.value = ""
                     _uiState.value = ConversationUiState.Error("Connection error: ${e.message}")
                 }
             }
@@ -166,7 +177,10 @@ class ConversationViewModel(
                         ConversationRespondRequest(text = text, history = history)
                     )
                     handleStream(responseBody)
+                } catch (e: CancellationException) {
+                    throw e
                 } catch (e: Exception) {
+                    _karaokeText.value = ""
                     _uiState.value = ConversationUiState.Error(e.message ?: "Failed to respond")
                 }
             } finally {
@@ -234,14 +248,15 @@ class ConversationViewModel(
         activeJob?.cancel()
         activeJob = null
         lastAction = null
+        // Reset the UI immediately -- the /stop call is best-effort and must
+        // never leave the user staring at a stale chat on a slow network.
+        _uiState.value = ConversationUiState.SelectingLevel
+        _dialogue.value = emptyList()
+        _karaokeText.value = ""
+        isProcessing.set(false)
+        stopAudio()
         viewModelScope.launch {
-            try {
-                apiService.stopConversation()
-            } finally {
-                _uiState.value = ConversationUiState.SelectingLevel
-                _dialogue.value = emptyList()
-                isProcessing.set(false)
-            }
+            runCatching { apiService.stopConversation() }
         }
     }
 
@@ -274,11 +289,13 @@ class ConversationViewModel(
     }
 
     private var mediaPlayer: MediaPlayer? = null
+    private var playToken = 0
 
     fun playAudio(text: String, existingUrl: String? = null) {
         if (text.isBlank() && existingUrl.isNullOrBlank()) return
 
         stopAudio()
+        val token = ++playToken
 
         viewModelScope.launch {
             var currentPlayer: MediaPlayer? = null
@@ -326,6 +343,16 @@ class ConversationViewModel(
                         true
                     }
                 }
+                // A newer play/stop superseded this one while TTS was in
+                // flight -- drop it instead of resurrecting stale audio.
+                if (token != playToken) {
+                    try {
+                        currentPlayer?.release()
+                    } catch (e: Exception) {
+                        Log.e("Lingo", "Error releasing superseded player", e)
+                    }
+                    return@launch
+                }
                 mediaPlayer = currentPlayer
             } catch (e: Exception) {
                 Log.e("Lingo", "Audio playback error", e)
@@ -359,6 +386,7 @@ class ConversationViewModel(
     }
 
     fun stopAudio() {
+        playToken++
         try {
             mediaPlayer?.stop()
             mediaPlayer?.release()

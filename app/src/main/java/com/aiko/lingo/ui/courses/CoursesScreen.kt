@@ -1,6 +1,5 @@
 package com.aiko.lingo.ui.courses
 
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -23,6 +22,8 @@ import androidx.lifecycle.viewModelScope
 import com.aiko.lingo.data.remote.AikoApiService
 import com.aiko.lingo.data.remote.CourseDetail
 import com.aiko.lingo.data.remote.CourseMeta
+import com.aiko.lingo.data.remote.CurrentLessonResponse
+import com.aiko.lingo.data.remote.LessonProgressDto
 import com.aiko.lingo.data.remote.LingoCache
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -45,13 +46,29 @@ class CoursesViewModel(private val api: AikoApiService, private val mode: String
 
     private var pendingId: String? = null
 
+    // --- Current lesson progression (one at a time + tests) ---
+    private val track get() = if (mode == "grammar") "grammar" else "vocab"
+    private val _current = MutableStateFlow<CourseDetail?>(null)
+    val current = _current.asStateFlow()
+    private val _progress = MutableStateFlow<LessonProgressDto?>(null)
+    val progress = _progress.asStateFlow()
+    private val _currentLoading = MutableStateFlow(false)
+    val currentLoading = _currentLoading.asStateFlow()
+    private val _currentError = MutableStateFlow<String?>(null)
+    val currentError = _currentError.asStateFlow()
+
     init {
         // Cache-first: instant list on revisit, refresh in background.
         LingoCache.get<List<CourseMeta>>(cacheKey, 600_000)?.let {
             _list.value = it
             _listLoading.value = false
         }
+        LingoCache.get<CurrentLessonResponse>("current_$mode", 60_000)?.let {
+            _current.value = it.lesson
+            _progress.value = it.progress
+        }
         reload()
+        loadCurrent()
     }
 
     fun reload() {
@@ -96,6 +113,35 @@ class CoursesViewModel(private val api: AikoApiService, private val mode: String
         pendingId = null
     }
 
+    /** One lesson at a time: the server tracks which deck is current. */
+    fun loadCurrent() {
+        viewModelScope.launch {
+            if (_current.value == null && _progress.value == null) {
+                _currentLoading.value = true
+            }
+            _currentError.value = null
+            try {
+                val res = if (track == "grammar") api.getCurrentGrammar() else api.getCurrentCourse()
+                _current.value = res.lesson
+                _progress.value = res.progress
+                LingoCache.put("current_$mode", res)
+            } catch (e: Exception) {
+                Log.e("Courses", "Failed to fetch current lesson", e)
+                if (_current.value == null && _progress.value == null) {
+                    _currentError.value = e.message ?: "Failed to load lesson"
+                }
+            }
+            _currentLoading.value = false
+        }
+    }
+
+    /** Called after a lesson/final test passes: progression may move. */
+    fun onTestPassed() {
+        LingoCache.invalidate("current_$mode", cacheKey)
+        loadCurrent()
+        reload()
+    }
+
     // --- Pronunciation: TTS per card, same guarded pattern as Learn ---
     private val _speakingKey = MutableStateFlow<String?>(null)
     val speakingKey = _speakingKey.asStateFlow()
@@ -132,20 +178,29 @@ class CoursesViewModel(private val api: AikoApiService, private val mode: String
                             _speakingKey.value = null
                         }
                     }
-                    setOnCompletionListener {
-                        try { release() } catch (e: Exception) {
+                    setOnCompletionListener { mp ->
+                        try { mp?.release() } catch (e: Exception) {
                             Log.e("Courses", "Error releasing card player", e) }
-                        mediaPlayer = null
+                        if (mediaPlayer === mp) {
+                            mediaPlayer = null
+                        }
                         if (token == playToken) _speakingKey.value = null
                     }
                     setOnErrorListener { mp, what, extra ->
                         Log.e("Courses", "Card audio error: what=$what, extra=$extra")
                         try { mp?.release() } catch (e: Exception) {
                             Log.e("Courses", "Error releasing card player", e) }
-                        mediaPlayer = null
+                        if (mediaPlayer === mp) {
+                            mediaPlayer = null
+                        }
                         if (token == playToken) _speakingKey.value = null
                         true
                     }
+                }
+                if (token != playToken) {
+                    try { currentPlayer?.release() } catch (e: Exception) {
+                        Log.e("Courses", "Error releasing superseded player", e) }
+                    return@launch
                 }
                 mediaPlayer = currentPlayer
             } catch (e: Exception) {
@@ -178,61 +233,84 @@ class CoursesViewModel(private val api: AikoApiService, private val mode: String
 }
 
 @Composable
-fun CoursesScreen(vm: CoursesViewModel, title: String, onBack: () -> Unit) {
-    val list by vm.list.collectAsState()
-    val detail by vm.detail.collectAsState()
-    val listLoading by vm.listLoading.collectAsState()
-    val detailLoading by vm.detailLoading.collectAsState()
-    val listError by vm.listError.collectAsState()
-    val detailError by vm.detailError.collectAsState()
+fun CoursesScreen(
+    vm: CoursesViewModel,
+    title: String,
+    onBack: () -> Unit,
+    onNavigateToTest: (String) -> Unit = {},
+    onNavigateToFinal: () -> Unit = {}
+) {
+    val current by vm.current.collectAsState()
+    val progress by vm.progress.collectAsState()
+    val currentLoading by vm.currentLoading.collectAsState()
+    val currentError by vm.currentError.collectAsState()
     val speakingKey by vm.speakingKey.collectAsState()
 
     Column(
         Modifier.fillMaxSize().safeDrawingPadding().padding(16.dp)
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            TextButton(onClick = {
-                if (detail != null) vm.backToList() else onBack()
-            }) { Text("← Back") }
+            TextButton(onClick = onBack) { Text("← Back") }
             Spacer(Modifier.width(8.dp))
             Text(title, style = MaterialTheme.typography.headlineMedium)
         }
         Spacer(Modifier.height(12.dp))
-        if (detailLoading && detail == null) {
-            LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
-            Spacer(Modifier.height(12.dp))
-        }
         when {
-            listLoading && list.isEmpty() && detail == null -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                CircularProgressIndicator()
+            currentLoading && current == null && progress == null -> {
+                Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                    CircularProgressIndicator()
+                }
             }
-            listError != null && list.isEmpty() && detail == null -> Column(Modifier.fillMaxSize(), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
-                Text("Error: $listError", textAlign = TextAlign.Center)
-                Button(onClick = { vm.reload() }) { Text("Retry") }
+            currentError != null && current == null && progress == null -> {
+                Column(
+                    Modifier.fillMaxSize(),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.Center
+                ) {
+                    Text("Error: $currentError", textAlign = TextAlign.Center)
+                    Spacer(Modifier.height(8.dp))
+                    Button(onClick = { vm.loadCurrent() }) { Text("Retry") }
+                }
             }
-            detail != null -> {
-                val d = detail!!
-                if (detailLoading) {
+            progress?.final_unlocked == true -> {
+                val p = progress!!
+                Card(shape = RoundedCornerShape(20.dp), modifier = Modifier.fillMaxWidth()) {
+                    Column(Modifier.padding(16.dp)) {
+                        Text("All ${p.lessons_total} decks cleared! ✨", fontWeight = FontWeight.Bold, fontSize = 16.sp)
+                        Text(
+                            "Final Grammar Test: random questions from every deck · 100% to level up 🎯",
+                            fontSize = 13.sp,
+                            color = MaterialTheme.colorScheme.secondary
+                        )
+                        Spacer(Modifier.height(12.dp))
+                        Button(
+                            onClick = onNavigateToFinal,
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = RoundedCornerShape(16.dp)
+                        ) { Text("Take ${p.level} Final Grammar Test 🏆") }
+                    }
+                }
+            }
+            current != null -> {
+                val d = current!!
+                val num = progress?.current_lesson ?: 1
+                val total = progress?.lessons_total ?: 0
+                if (currentLoading) {
                     LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
                     Spacer(Modifier.height(8.dp))
                 }
-                if (detailError != null) {
-                    Card(
-                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.errorContainer),
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        Column(Modifier.padding(12.dp)) {
-                            Text("Couldn't refresh detail: $detailError")
-                            TextButton(onClick = { vm.retryDetail() }) { Text("Retry detail") }
-                        }
-                    }
-                    Spacer(Modifier.height(8.dp))
-                }
-                Text(d.title, fontWeight = FontWeight.Bold, fontSize = 16.sp)
-                Text("${d.level} · ${d.cards.size} cards", color = MaterialTheme.colorScheme.primary)
+                Text(
+                    if (total > 0) "Deck $num of $total · ${d.title}" else d.title,
+                    fontWeight = FontWeight.Bold, fontSize = 16.sp
+                )
+                Text(
+                    "${d.level} · ${d.cards.size} patterns — study, then test ✍️",
+                    color = MaterialTheme.colorScheme.primary,
+                    fontSize = 13.sp
+                )
                 Spacer(Modifier.height(12.dp))
-                LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    items(d.cards) { c ->
+                LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.weight(1f)) {
+                    items(d.cards, key = { "${it.front}||${it.back}" }) { c ->
                         Card(shape = RoundedCornerShape(16.dp), modifier = Modifier.fillMaxWidth()) {
                             Row(
                                 modifier = Modifier.padding(16.dp),
@@ -260,40 +338,24 @@ fun CoursesScreen(vm: CoursesViewModel, title: String, onBack: () -> Unit) {
                         }
                     }
                 }
-            }
-            detail == null && detailLoading -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                CircularProgressIndicator()
-            }
-            detail == null && detailError != null -> Column(Modifier.fillMaxSize(), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
-                Text("Error: $detailError", textAlign = TextAlign.Center)
                 Spacer(Modifier.height(8.dp))
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Button(onClick = { vm.retryDetail() }) { Text("Retry") }
-                    OutlinedButton(onClick = { vm.backToList() }) { Text("Back to list") }
-                }
+                Button(
+                    onClick = { onNavigateToTest(d.id) },
+                    modifier = Modifier.fillMaxWidth().height(52.dp),
+                    shape = RoundedCornerShape(16.dp)
+                ) { Text("Take Test $num ✍️ (100% to advance)", fontWeight = FontWeight.ExtraBold) }
             }
-            !listLoading && list.isEmpty() && detail == null -> Column(
-                Modifier.fillMaxSize(),
-                horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.Center
-            ) {
-                Text("📚", fontSize = 40.sp)
-                Spacer(Modifier.height(8.dp))
-                Text("No decks yet — check back soon!", textAlign = TextAlign.Center)
-                Spacer(Modifier.height(8.dp))
-                Button(onClick = { vm.reload() }) { Text("Reload") }
-            }
-            else -> LazyColumn(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                items(list, key = { it.id }) { deck ->
-                    Card(
-                        modifier = Modifier.fillMaxWidth().clickable { vm.open(deck.id) },
-                        shape = RoundedCornerShape(16.dp)
-                    ) {
-                        Column(Modifier.padding(14.dp)) {
-                            Text(deck.title, fontSize = 15.sp, fontWeight = FontWeight.Bold)
-                            Text("${deck.level} · ${deck.card_count} cards", fontSize = 13.sp)
-                        }
-                    }
+            else -> {
+                Column(
+                    Modifier.fillMaxSize(),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.Center
+                ) {
+                    Text("📚", fontSize = 40.sp)
+                    Spacer(Modifier.height(8.dp))
+                    Text("No decks yet — check back soon!", textAlign = TextAlign.Center)
+                    Spacer(Modifier.height(8.dp))
+                    Button(onClick = { vm.loadCurrent() }) { Text("Reload") }
                 }
             }
         }

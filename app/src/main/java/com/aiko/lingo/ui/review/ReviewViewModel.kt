@@ -49,6 +49,9 @@ class ReviewViewModel(private val apiService: AikoApiService) : ViewModel() {
     private val _choices = MutableStateFlow<List<String>>(emptyList())
     val choices = _choices.asStateFlow()
 
+    private val _submitting = MutableStateFlow(false)
+    val submitting = _submitting.asStateFlow()
+
     private val FALLBACK_MEANINGS = listOf(
         "to go", "to come", "to see", "to drink", "to eat",
         "friend", "family", "school", "water", "apple",
@@ -125,6 +128,8 @@ class ReviewViewModel(private val apiService: AikoApiService) : ViewModel() {
     }
 
     fun submitReview(cardId: Int, response: String, grade: Int) {
+        if (_submitting.value) return
+        _submitting.value = true
         viewModelScope.launch {
             try {
                 val result = apiService.respondToReview(
@@ -150,7 +155,14 @@ class ReviewViewModel(private val apiService: AikoApiService) : ViewModel() {
                 }
             } catch (e: Exception) {
                 Log.e("Review", "Failed to submit review", e)
-                _uiState.value = ReviewUiState.Error(e.message ?: "Failed to submit review")
+                // Stay on the card so no progress is lost; the screen shows
+                // a toast with a retry instead of a dead-end error screen.
+                _toastMessage.value = Toast(
+                    type = "error",
+                    message = "Couldn't save that answer — tap CONTINUE to retry."
+                )
+            } finally {
+                _submitting.value = false
             }
         }
     }

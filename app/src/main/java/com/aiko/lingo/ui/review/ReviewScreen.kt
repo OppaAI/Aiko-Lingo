@@ -185,9 +185,11 @@ private fun ColumnScope.ReviewCardContent(
 ) {
     val haptic = LocalHapticFeedback.current
     val choices by viewModel.choices.collectAsState()
-    var selectedChoice by remember { mutableStateOf<String?>(null) }
-    var selectedGrade by remember { mutableIntStateOf(-1) }
-    var showMeaning by remember { mutableStateOf(false) }
+    val submitting by viewModel.submitting.collectAsState()
+    // Reset per-card answer UI whenever the card changes.
+    var selectedChoice by remember(card.card_id) { mutableStateOf<String?>(null) }
+    var selectedGrade by remember(card.card_id) { mutableIntStateOf(-1) }
+    var showMeaning by remember(card.card_id) { mutableStateOf(false) }
 
     Column(
         modifier = Modifier
@@ -304,7 +306,8 @@ private fun ColumnScope.ReviewCardContent(
             }
         }
 
-        Spacer(modifier = Modifier.weight(1f))
+        // Fixed spacer: weight has no meaning inside a scrollable Column.
+        Spacer(modifier = Modifier.height(24.dp))
 
         if (showMeaning) {
             Surface(
@@ -332,10 +335,8 @@ private fun ColumnScope.ReviewCardContent(
                     Button(
                         onClick = {
                             viewModel.submitReview(card.card_id, selectedChoice ?: "", selectedGrade)
-                            selectedChoice = null
-                            selectedGrade = -1
-                            showMeaning = false
                         },
+                        enabled = !submitting,
                         modifier = Modifier.fillMaxWidth().height(60.dp),
                         shape = RoundedCornerShape(20.dp),
                         colors = ButtonDefaults.buttonColors(
@@ -343,6 +344,14 @@ private fun ColumnScope.ReviewCardContent(
                         ),
                         elevation = ButtonDefaults.buttonElevation(defaultElevation = 4.dp)
                     ) {
+                        if (submitting) {
+                            CircularProgressIndicator(
+                                modifier = Modifier.size(20.dp),
+                                strokeWidth = 2.dp,
+                                color = Color.White
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                        }
                         Text("CONTINUE", fontWeight = FontWeight.ExtraBold, fontSize = 15.sp)
                     }
                 }

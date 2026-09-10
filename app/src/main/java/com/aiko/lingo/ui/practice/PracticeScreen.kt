@@ -52,13 +52,17 @@ fun PracticeScreen(
                 PracticeQuestion(viewModel)
             }
             is PracticeUiState.Finished -> {
-                PracticeFinished(
-                    correct = state.correct,
-                    total = state.total,
-                    xp = state.xp,
-                    onRetry = { viewModel.loadSession() },
-                    onBack = onBack
-                )
+                if (state.total == 0) {
+                    PracticeEmpty(onBack = onBack)
+                } else {
+                    PracticeFinished(
+                        correct = state.correct,
+                        total = state.total,
+                        xp = state.xp,
+                        onRetry = { viewModel.loadSession() },
+                        onBack = onBack
+                    )
+                }
             }
             is PracticeUiState.Error -> {
                 Column(
@@ -104,7 +108,7 @@ private fun PracticeQuestion(viewModel: PracticeViewModel) {
     Column(modifier = Modifier.fillMaxSize()) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             LinearProgressIndicator(
-                progress = { (index.toFloat()) / session.size },
+                progress = { ((index + 1).toFloat()) / session.size },
                 modifier = Modifier
                     .weight(1f)
                     .height(12.dp),
@@ -226,6 +230,33 @@ private fun PracticeQuestion(viewModel: PracticeViewModel) {
                     Text("Send", fontWeight = FontWeight.ExtraBold)
                 }
             }
+        }
+    }
+}
+
+@Composable
+private fun PracticeEmpty(onBack: () -> Unit) {
+    Column(
+        modifier = Modifier.fillMaxSize(),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center
+    ) {
+        Text("📭", fontSize = 52.sp)
+        Spacer(modifier = Modifier.height(12.dp))
+        Text(
+            "No cards yet!",
+            style = MaterialTheme.typography.headlineMedium,
+            fontWeight = FontWeight.ExtraBold,
+            color = ShoujoText
+        )
+        Text(
+            "Chat with Aiko or study a lesson first — new words show up here ♡",
+            textAlign = TextAlign.Center,
+            color = Color.Gray,
+            modifier = Modifier.padding(horizontal = 24.dp, vertical = 8.dp)
+        )
+        TextButton(onClick = onBack, modifier = Modifier.padding(top = 4.dp)) {
+            Text("Back to menu", fontWeight = FontWeight.Bold)
         }
     }
 }

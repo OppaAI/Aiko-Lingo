@@ -108,6 +108,15 @@ fun TranslateScreen(
 
                 Spacer(modifier = Modifier.height(32.dp))
 
+                // Auto-direction: anything-but-Japanese -> Japanese registers;
+                // Japanese -> a single English translation.
+                Text(
+                    "Auto-detect: EN/中文/Français/… → Japanese · 日本語 → English",
+                    fontSize = 12.sp,
+                    color = Color.Gray
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+
                 when (val state = uiState) {
                     TranslateUiState.Loading -> {
                         Box(
@@ -211,6 +220,9 @@ fun TranslationCard(
     val audioLoadingKey by viewModel.audioLoading.collectAsState()
     val cardKey = "${translation.text}-${translation.register}"
     val isAudioLoading = audioLoadingKey == cardKey
+    // TTS is a Japanese voice: only offer playback for Japanese text so an
+    // English result never gets garbled through the wrong synthesizer.
+    val canSpeak = containsJapanese(translation.text)
 
     Card(
         modifier = Modifier
@@ -248,13 +260,18 @@ fun TranslationCard(
             }
             IconButton(
                 onClick = onPlayAudio,
-                enabled = !isAudioLoading,
+                enabled = !isAudioLoading && canSpeak,
                 modifier = Modifier
                     .size(64.dp)
-                    .background(PastelPurple.copy(alpha = 0.5f), RoundedCornerShape(32.dp))
-                    .shadow(1.dp, RoundedCornerShape(32.dp))
+                    .background(
+                        if (canSpeak) PastelPurple.copy(alpha = 0.5f) else Color.Transparent,
+                        RoundedCornerShape(32.dp)
+                    )
+                    .shadow(if (canSpeak) 1.dp else 0.dp, RoundedCornerShape(32.dp))
             ) {
-                if (isAudioLoading) {
+                if (!canSpeak) {
+                    // English result: no TTS in this app, keep layout stable.
+                } else if (isAudioLoading) {
                     CircularProgressIndicator(modifier = Modifier.size(28.dp), strokeWidth = 3.dp, color = PastelPurpleDark)
                 } else {
                     Icon(Icons.Default.PlayArrow, contentDescription = "Play Audio", tint = PastelPurpleDark, modifier = Modifier.size(36.dp))
@@ -262,4 +279,9 @@ fun TranslationCard(
             }
         }
     }
+}
+
+/** True when the text contains hiragana, katakana, or kanji. */
+fun containsJapanese(s: String): Boolean = s.any { c ->
+    c in '\u3040'..'\u309F' || c in '\u30A0'..'\u30FF' || c in '\u4E00'..'\u9FFF'
 }

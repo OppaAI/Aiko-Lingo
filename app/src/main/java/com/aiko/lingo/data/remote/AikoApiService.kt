@@ -24,7 +24,7 @@ interface AikoApiService {
     suspend fun getHint(): ConversationHintResponse
 
     @POST("api/nihongo/conversation/stop")
-    suspend fun stopConversation(): Unit
+    suspend fun stopConversation(): StopResponse
 
     @GET("api/nihongo/tts")
     suspend fun getTts(@Query("text") text: String): TtsResponse
@@ -98,7 +98,48 @@ interface AikoApiService {
 
     @POST("api/nihongo/practice/mark")
     suspend fun markPractice(@Body body: PracticeMarkRequest): PracticeMarkResponse
+
+    // Lesson-at-a-time progression: one current lesson, per-lesson typing
+    // test, and a level final. Same shape for vocab (courses) and grammar.
+    @GET("api/nihongo/courses/current")
+    suspend fun getCurrentCourse(): CurrentLessonResponse
+
+    @GET("api/nihongo/courses/{courseId}/test")
+    suspend fun getCourseTest(@Path("courseId") courseId: String): TestQuestionsResponse
+
+    @POST("api/nihongo/courses/{courseId}/test/submit")
+    suspend fun submitCourseTest(
+        @Path("courseId") courseId: String,
+        @Body body: TestSubmitRequest
+    ): TestSubmitResponse
+
+    @GET("api/nihongo/courses/final/test")
+    suspend fun getCourseFinalTest(@Query("n") n: Int = 100): TestQuestionsResponse
+
+    @POST("api/nihongo/courses/final/submit")
+    suspend fun submitCourseFinal(@Body body: TestSubmitRequest): TestSubmitResponse
+
+    @GET("api/nihongo/grammar/current")
+    suspend fun getCurrentGrammar(): CurrentLessonResponse
+
+    @GET("api/nihongo/grammar/{grammarId}/test")
+    suspend fun getGrammarTest(@Path("grammarId") grammarId: String): TestQuestionsResponse
+
+    @POST("api/nihongo/grammar/{grammarId}/test/submit")
+    suspend fun submitGrammarTest(
+        @Path("grammarId") grammarId: String,
+        @Body body: TestSubmitRequest
+    ): TestSubmitResponse
+
+    @GET("api/nihongo/grammar/final/test")
+    suspend fun getGrammarFinalTest(@Query("n") n: Int = 100): TestQuestionsResponse
+
+    @POST("api/nihongo/grammar/final/submit")
+    suspend fun submitGrammarFinal(@Body body: TestSubmitRequest): TestSubmitResponse
 }
+
+@Serializable
+data class StopResponse(val success: Boolean = false)
 
 @Serializable
 data class TtsResponse(val audioUrl: String)
@@ -175,3 +216,63 @@ data class PracticeMarkRequest(val correct: Int, val total: Int)
 
 @Serializable
 data class PracticeMarkResponse(val xp: Int = 0, val correct: Int = 0)
+
+// --- Lesson / test progression ------------------------------------------------
+// Backend `lesson` payloads reuse CourseDetail (extra lesson/lessons_total keys
+// are ignored); `lesson` is null once the level final is unlocked.
+@Serializable
+data class LessonProgressDto(
+    val level: String = "N5",
+    val track: String = "vocab",
+    val current_lesson: Int = 1,
+    val lessons_total: Int = 0,
+    val final_unlocked: Boolean = false
+)
+
+@Serializable
+data class CurrentLessonResponse(
+    val progress: LessonProgressDto = LessonProgressDto(),
+    val lesson: CourseDetail? = null
+)
+
+@Serializable
+data class TestQuestionDto(
+    val qid: String = "",
+    val prompt: String = "",
+    val hint: String = ""
+)
+
+@Serializable
+data class TestQuestionsResponse(
+    val deck_id: String = "",
+    val title: String = "",
+    val level: String = "",
+    val questions: List<TestQuestionDto> = emptyList(),
+    val total_at_level: Int = 0
+)
+
+@Serializable
+data class TestAnswerDto(val qid: String, val answer: String = "")
+
+@Serializable
+data class TestSubmitRequest(val answers: List<TestAnswerDto> = emptyList())
+
+@Serializable
+data class TestItemResultDto(
+    val qid: String = "",
+    val prompt: String = "",
+    val expected: List<String> = emptyList(),
+    val given: String = "",
+    val correct: Boolean = false
+)
+
+@Serializable
+data class TestSubmitResponse(
+    val correct: Int = 0,
+    val total: Int = 0,
+    val passed: Boolean = false,
+    val xp: Int = 0,
+    val results: List<TestItemResultDto> = emptyList(),
+    val progress: LessonProgressDto? = null,
+    val new_level: String? = null
+)

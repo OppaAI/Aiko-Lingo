@@ -19,6 +19,7 @@ import com.aiko.lingo.data.remote.PracticeMarkRequest
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import retrofit2.HttpException
 
 class PracticeViewModel(private val apiService: AikoApiService) : ViewModel() {
 
@@ -57,10 +58,20 @@ class PracticeViewModel(private val apiService: AikoApiService) : ViewModel() {
             try {
                 val cards = apiService.getPracticeSession(SESSION_SIZE)
                 if (cards.isEmpty()) {
-                    _uiState.value = PracticeUiState.Finished(0, SESSION_SIZE, 0)
+                    // total == 0 marks the "nothing to study yet" empty state.
+                    _uiState.value = PracticeUiState.Finished(0, 0, 0)
                 } else {
                     _session.value = cards
                     _uiState.value = PracticeUiState.Question
+                }
+            } catch (e: HttpException) {
+                // Backend 400s when the pool is empty -- same empty state as
+                // Review, not an error screen.
+                if (e.code() == 400) {
+                    _uiState.value = PracticeUiState.Finished(0, 0, 0)
+                } else {
+                    Log.e("Practice", "Failed to load session", e)
+                    _uiState.value = PracticeUiState.Error(e.message() ?: "Failed to load cards")
                 }
             } catch (e: Exception) {
                 Log.e("Practice", "Failed to load session", e)
@@ -114,7 +125,11 @@ class PracticeViewModel(private val apiService: AikoApiService) : ViewModel() {
     }
 
     private fun normalize(s: String): String {
-        return s.trim().lowercase().replace("\\s+".toRegex(), "")
+        return s.trim().lowercase()
+            .replace("\\s+".toRegex(), "")
+            // Grammar patterns carry a leading 〜 which phone keyboards make
+            // painful to type; accept the bare form too.
+            .trimStart('〜', '～', '~', '-', '·')
     }
 
     // --- Pronunciation for the current card ---
@@ -152,20 +167,29 @@ class PracticeViewModel(private val apiService: AikoApiService) : ViewModel() {
                             if (token == playToken) _speaking.value = false
                         }
                     }
-                    setOnCompletionListener {
-                        try { release() } catch (e: Exception) {
+                    setOnCompletionListener { mp ->
+                        try { mp?.release() } catch (e: Exception) {
                             Log.e("Practice", "Error releasing player", e) }
-                        mediaPlayer = null
+                        if (mediaPlayer === mp) {
+                            mediaPlayer = null
+                        }
                         if (token == playToken) _speaking.value = false
                     }
                     setOnErrorListener { mp, what, extra ->
                         Log.e("Practice", "Audio error: what=$what, extra=$extra")
                         try { mp?.release() } catch (e: Exception) {
                             Log.e("Practice", "Error releasing player", e) }
-                        mediaPlayer = null
+                        if (mediaPlayer === mp) {
+                            mediaPlayer = null
+                        }
                         if (token == playToken) _speaking.value = false
                         true
                     }
+                }
+                if (token != playToken) {
+                    try { currentPlayer?.release() } catch (e: Exception) {
+                        Log.e("Practice", "Error releasing superseded player", e) }
+                    return@launch
                 }
                 mediaPlayer = currentPlayer
             } catch (e: Exception) {
