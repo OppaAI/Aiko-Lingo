@@ -23,6 +23,7 @@ import com.aiko.lingo.data.model.ConversationResponse
 import com.aiko.lingo.data.model.ConversationStartRequest
 import com.aiko.lingo.data.model.DialogueHistoryEntry
 import com.aiko.lingo.data.model.Toast
+import com.aiko.lingo.data.StudyTracker
 import com.aiko.lingo.data.remote.AikoApiService
 import android.media.AudioAttributes
 import android.media.MediaPlayer
@@ -279,6 +280,7 @@ class ConversationViewModel(
             feedback = response.feedback,
             suggestion = response.suggestion
         )
+        StudyTracker.markStudied()
 
         if (response.isFinished) {
             _uiState.value = ConversationUiState.Finished

@@ -3,6 +3,7 @@ package com.aiko.lingo.ui.test
 import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.aiko.lingo.data.StudyTracker
 import com.aiko.lingo.data.remote.AikoApiService
 import com.aiko.lingo.data.remote.TestAnswerDto
 import com.aiko.lingo.data.remote.TestQuestionDto
@@ -100,6 +101,7 @@ class LessonTestViewModel(
                     else -> api.submitCourseTest(deckId.orEmpty(), body)
                 }
                 _uiState.value = LessonTestUiState.Result(res, isFinal)
+                StudyTracker.markStudied()
             } catch (e: Exception) {
                 Log.e("LessonTest", "Submit failed", e)
                 // Keep the questions on screen so answers aren't lost.

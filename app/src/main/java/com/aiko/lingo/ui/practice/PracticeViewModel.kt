@@ -14,6 +14,7 @@ import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.aiko.lingo.data.model.ReviewCard
+import com.aiko.lingo.data.StudyTracker
 import com.aiko.lingo.data.remote.AikoApiService
 import com.aiko.lingo.data.remote.PracticeMarkRequest
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -111,6 +112,7 @@ class PracticeViewModel(private val apiService: AikoApiService) : ViewModel() {
     }
 
     private fun finish() {
+        StudyTracker.markStudied()
         viewModelScope.launch {
             val total = _session.value.size
             val correct = _score.value

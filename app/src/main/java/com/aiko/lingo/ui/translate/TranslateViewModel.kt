@@ -7,6 +7,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.aiko.lingo.data.model.TranslateRequest
 import com.aiko.lingo.data.model.TranslationResult
+import com.aiko.lingo.data.StudyTracker
 import com.aiko.lingo.data.remote.AikoApiService
 import com.aiko.lingo.data.remote.LingoCache
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -40,6 +41,7 @@ class TranslateViewModel(private val apiService: AikoApiService) : ViewModel() {
                 val response = apiService.translate(TranslateRequest(key))
                 LingoCache.put("tr_$key", response.translations)
                 _uiState.value = TranslateUiState.Success(response.translations)
+                StudyTracker.markStudied()
             } catch (e: Exception) {
                 Log.e("Lingo", "Translation error", e)
                 _uiState.value = TranslateUiState.Error(e.message ?: "Unknown error")

@@ -37,17 +37,17 @@
 
 ### Current (Kotlin/Jetpack Compose + FastAPI backend)
 
-- **Vocab 🌱** – Merged lesson decks + full JLPT course decks in one hub:
-  - JLPT track selector (N5 → N1, lowest first) with earned progression — the next level unlocks only when the current pool is cleared
-  - Shared new-vocab pool (`Got it +XP`), kana decks, and course decks, every card with a 🔊 pronunciation button
-  - Flashcard viewer with tap-to-reveal and TTS
-- **Grammar ✏️** – JLPT grammar decks with per-card pronunciation, same deck UX as Vocab courses
-- **Review 🔁** – One session = 10 random learnt cards (hiragana, katakana, kanji, phrases, sentences) as multiple-choice questions. Cards may repeat across sessions by chance, so correct answers can resurface later. Every answer is still graded through SM-2, so scheduling, streak, and XP keep working
-- **Practice ✍️** – Typing practice: 10 random learnt cards, one at a time. Hear the word, type the Japanese (keyboard, handwriting/draw, or voice — all via your system IME), Send to check. Match → next card; 5 XP per correct answer
+- **Vocab 🌱** – One lesson at a time, JLPT-tracked:
+  - JLPT track selector (N5 → N1) with earned progression
+  - Kana decks drill 10 random cards per round (Shuffle ↻) with tap-to-reveal flashcards and 🔊 per-card pronunciation
+  - Words & Phrases: 10 fresh random pool words in the same flashcard format
+  - Current lesson card → full flashcard screen; per-lesson typing **Test** (every card, random order, 100% to advance); level **Final Test** (up to 100 sampled questions, 100% auto-levels-up your JLPT)
+- **Grammar ✏️** – Same study flow as Vocab: one deck at a time (basics first, then OpenJLPT), per-pattern 🔊 (pattern markers like 〜 are never spoken), typing tests per deck plus a level final
+- **Review 🔁** – One session = 10 random learnt cards (SRS + spawn pool + JLPT vocab **and** grammar) as multiple-choice questions. Cards may repeat across sessions by chance. Every answer is graded through SM-2, so scheduling, streak, and XP keep working; a failed submit keeps you on the card with a retry toast instead of wiping the session
+- **Practice ✍️** – Typing practice over the same mixed pool: 10 random cards, one at a time. Hear the word, type the Japanese (keyboard, handwriting/draw, or voice — all via your system IME), Send to check. Match → next card; 5 XP per correct answer; grammar patterns accept the bare form (no 〜 needed)
 - **Level gating** – Everything (vocab, review, practice, grammar, courses) is filtered to your JLPT level or lower: N5 sees only N5, N4 sees N5+N4, and so on. Never anything above your level
-- **Translation Mode** – Translate English → Japanese with support for:
-  - 3–5 registers per request (formal 敬語, casual カジュアル, and points in between), generated in one LLM call
-  - Per-line audio playback via TTS, repeat translations served instantly from cache
+- **Translation Mode** – Auto-direction: any non-Japanese input (English, Chinese, French, …) → Japanese in 3–5 registers (formal 敬語, casual カジュアル, points in between) in one LLM call; Japanese input → a single natural English translation. 🔊 playback is offered only for Japanese text (the TTS voice is Japanese-only); repeat translations served instantly from cache
+- **Study Reminders 🔔** – An hourly nudge at the top of the hour while you haven't studied that day (WorkManager + notification channel, granted via the standard Android 13+ permission prompt). Any real study action — a review answer, a finished practice, a test submit, a translation, a chat turn — silences reminders for the day; they re-arm automatically after midnight, and reschedule after reboot
 - **Conversation Mode** – Guided dialogue with three difficulty levels (beginner / intermediate / advanced):
   - Streaming replies with a typewriter-style karaoke presentation
   - Live mistake detection: incorrect turns surface English feedback plus a corrected Japanese suggestion
@@ -63,11 +63,12 @@
   - Dark "Lavender Glass" theme (deep purples, high contrast)
   - 8 distinct menu-card hues; theme choice survives rotation
 
-### Planned
+### Planned (see [Roadmap](#development-roadmap) for build order)
 
-- **Dedicated Voice Input** – Microphone → ASR inside the app (Practice already accepts voice today via the system keyboard's 🎤 mode, plus ✍️ handwriting input the same way)
-- **Multiplayer Leaderboard** – Real cross-user ranking; today's `/leaderboard` endpoint only ever returns the requesting user
-- **Offline Mode** – Beyond today's in-memory `LingoCache`: persisted vocabularies and common phrases for low-connectivity scenarios
+- **Persisted Offline Cache** – Room-backed lesson/weak-vocab/Word-of-the-Day so study screens open with zero network (beyond today's in-memory `LingoCache`)
+- **Dedicated Voice Input** – Microphone → system ASR straight into Practice/Test/Chat inputs (voice already works today via the system keyboard's 🎤 mode, plus ✍️ handwriting the same way)
+- **Companion Widget** – Quick translation from the homescreen
+- **Multiplayer Leaderboard** – Real cross-user ranking; today's `/leaderboard` endpoint only ever returns the requesting user (needs a backend endpoint first)
 - **Session Persistence Across Devices** – Per-user state already survives app/backend restarts on the server; a future pass will let it sync across multiple client devices for the same user
 
 ---
@@ -114,17 +115,26 @@ MainActivity (short-TTL JSON client + long-TTL streaming client)
 ├── MainMenu (Vocab / Grammar / Review / Practice / Chat / Translate / Stats / Ranks)
 ├── VocabScreen              (VocabViewModel)
 │   ├── JLPT Track (N5→N1, locked progression) + progress bar
-│   ├── New-vocab pool (Got it +XP) + kana decks + course decks
+│   ├── Kana decks (random-10 + Shuffle ↻) + Words & Phrases flashcards
+│   ├── Current-lesson cards → lesson screen / typing Test screen / Final
 │   ├── FlashcardViewer + per-card 🔊 TTS (stale-tap guarded MediaPlayer)
 │   └── LingoCache (instant revisits, background refresh)
 ├── GrammarScreen            (CoursesViewModel, mode=grammar)
+│   ├── Current-deck cards → deck screen / typing Test screen / Final
+│   └── 🔊 skips 〜 markers (〜です speaks as です)
+├── LessonTestScreen         (LessonTestViewModel, track=vocab|grammar)
+│   ├── One input per question (whole lesson / ≤100 final), random order
+│   └── Result → misses review → next lesson / level-up
 ├── ReviewScreen             (ReviewViewModel)
-│   ├── 10 random learnt cards, multiple choice, SM-2 grading
-│   └── Finished hub → Vocab / Practice
+│   ├── 10 random cards (SRS + spawn + JLPT vocab + grammar), SM-2 grading
+│   ├── Submit guard + failure toast (session survives network blips)
+│   └── Finished hub → Vocab / Practice (dedicated empty state included)
 ├── PracticeScreen           (PracticeViewModel)
 │   ├── Type-the-answer + 🔊 + IME (⌨️ ✍️ 🎤), 5 XP per correct
+│   ├── 〜-tolerant matching, Empty state when the pool is dry
 │   └── Finished → score + XP + retry
 ├── TranslateScreen          (TranslateViewModel, result cache)
+│   └── 🔊 only on Japanese text (TTS voice is Japanese-only)
 ├── ConversationScreen       (ConversationViewModel, streaming client)
 │   ├── LevelSelection
 │   ├── DialogueBubble / KaraokeBubble (typewriter streaming)
@@ -174,23 +184,42 @@ GET /api/nihongo/learn/status     → { "level": "N5", "levels": [...], "pool_si
 ```
 Only `pool_id`s are trusted on mark — client-side front/back text is ignored.
 
-#### Vocab — Lesson Decks & Courses
+ #### Vocab — Lesson Decks & Courses
 ```http
 GET /api/nihongo/lessons          → [{ "id": "hiragana", "title": "Hiragana", ... }]
 GET /api/nihongo/lessons/{deck_id}
-GET /api/nihongo/courses          → [{ "id": "n5-lesson-1", "title": "N5 Lesson 1 · Daily Words", "level": "N5", "kind": "vocab", "card_count": 12 }]
+GET /api/nihongo/courses          → [{ "id": "openjlpt-n5-lesson-1", "title": "N5 Lesson 1 (OpenJLPT)", "level": "N5", "kind": "course", "card_count": 12 }]
 GET /api/nihongo/courses/{course_id}
 GET /api/nihongo/grammar
 GET /api/nihongo/grammar/{grammar_id}
 ```
 Lists return `[]` when empty (never 404); only unknown detail ids 404 — including ids above your JLPT level.
 
+#### Lesson Progression — One At A Time + Typing Tests + Finals
+Same shape under `/courses` (vocab) and `/grammar` (grammar decks):
+```http
+GET /api/nihongo/courses/current
+→ { "progress": { "level": "N5", "track": "vocab", "current_lesson": 1,
+                  "lessons_total": 56, "final_unlocked": false },
+    "lesson": { "id": "openjlpt-n5-lesson-1", "title": "…", "cards": […] } }
+
+GET /api/nihongo/courses/{course_id}/test
+→ { "deck_id": "…", "title": "…", "questions": [{ "qid": "c0", "prompt": "cat" }, …] }
+
+POST /api/nihongo/courses/{course_id}/test/submit
+{ "answers": [{ "qid": "c0", "answer": "ねこ" }] }
+→ { "correct": 12, "total": 12, "passed": true, "xp": 24,
+    "results": [{ "qid": "c0", "prompt": "cat", "expected": ["ねこ"], "given": "ねこ", "correct": true }, …],
+    "progress": { … }, "new_level": null }
+```
+Lesson tests cover the whole deck in random order and need 100% to advance (answer matching is server-side: reading/front, case/space-insensitive, 〜-tolerant, grammar gloss-tolerant). Final variants (`GET …/final/test?n=100`, `POST …/final/submit`) sample up to 100 cards across the level; a passed final auto-levels-up your JLPT (`new_level`). Tested cards enter your SRS queue, and every submit records streak + XP.
+
 #### Review — Random 10-Card Session
 ```http
 GET /api/nihongo/review/session?n=10
 → [{ "card_id": 4, "hiragana": "たべる", "meaning": "to eat", "context": "", "kanji": "食べる" }]
 ```
-Random learnt cards at/below your level (repeats across sessions allowed); tops up from shared materials when your learnt pool is short. Grade each card with the existing respond endpoint:
+Random learnt cards at/below your level (SRS + spawn pool + JLPT vocab + grammar; repeats across sessions allowed); tops up from shared materials when your learnt pool is short. Grade each card with the existing respond endpoint:
 ```http
 POST /api/nihongo/conversation/review/respond
 Content-Type: application/json
@@ -215,6 +244,7 @@ POST /api/nihongo/practice/mark          { "correct": 8, "total": 10 }  → { "x
 5 XP per correct card. Answer matching is client-side (hiragana or kanji, case/space-insensitive).
 
 #### Translate
+Auto-direction: Japanese input → one English translation; anything else → Japanese registers.
 ```http
 POST /api/nihongo/translate
 Content-Type: application/json
@@ -231,6 +261,7 @@ Response:
   ]
 }
 ```
+Japanese input instead returns exactly one item (`{ "register": "English", "text": "…" }`) — registers make no sense for English output.
 
 #### Conversation — Start (streaming, `text/event-stream`)
 ```http
@@ -356,10 +387,18 @@ Legacy files (`data/streaks|levels|xp/*.json`, `lingo_vocab.db`, `vocab_pool.db`
 - [x] JLPT track (N5→N1) with earned progression, level-gated content, and per-user SQLite storage
 - [x] Vocab hub (decks + courses + pronunciation), Grammar decks, typing Practice with XP
 - [x] Cache-first screens + split network timeouts for instant revisits
-- [ ] Multiplayer leaderboard (real cross-user ranking, not just the requesting user)
-- [ ] Dedicated in-app voice input (microphone → ASR; Practice already takes voice via system IME)
-- [ ] Persisted offline vocabulary cache (beyond today's in-memory `LingoCache`)
-- [ ] Companion widget (quick translation from homescreen)
+
+### Phase 4 (Complete)
+- [x] Lesson-at-a-time study flow: one vocab lesson / grammar deck at a time, per-lesson typing tests (100% to advance), level finals (100% auto-levels-up JLPT)
+- [x] Review/Practice draw from SRS + spawn pool + JLPT vocab + grammar
+- [x] Translate auto-direction (non-Japanese → Japanese registers; Japanese → single English) with Japanese-only TTS buttons
+- [x] Hourly study reminders (top-of-hour nudge while idle that day; silent after studying; re-arms at midnight; survives reboot)
+
+### Phase 5 (Proposed — in recommended build order)
+- [ ] Persisted offline vocabulary cache (Room: bundle current lesson + weak vocab + Word of the Day so study screens open with zero network; sync on refresh) — biggest daily-use win, no backend changes
+- [ ] Dedicated in-app voice input (system `SpeechRecognizer` → fills Practice/Test/Chat inputs; no extra permission beyond the mic prompt, no server work)
+- [ ] Companion widget (homescreen quick-translate; small Glance widget reusing `/translate` + TTS)
+- [ ] Multiplayer leaderboard (real cross-user ranking — needs a backend ranking endpoint first, so it goes last)
 
 ---
 

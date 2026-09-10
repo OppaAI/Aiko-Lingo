@@ -13,6 +13,7 @@ import androidx.lifecycle.viewModelScope
 import com.aiko.lingo.data.model.ReviewCard
 import com.aiko.lingo.data.model.ReviewResponseRequest
 import com.aiko.lingo.data.model.Toast
+import com.aiko.lingo.data.StudyTracker
 import com.aiko.lingo.data.remote.AikoApiService
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -140,6 +141,7 @@ class ReviewViewModel(private val apiService: AikoApiService) : ViewModel() {
                     )
                 )
                 _reviewsCompleted.value += 1
+                StudyTracker.markStudied()
 
                 result.toast?.let { _toastMessage.value = it }
 

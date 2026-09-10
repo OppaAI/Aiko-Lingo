@@ -27,6 +27,8 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import com.aiko.lingo.data.remote.AikoApiService
+import com.aiko.lingo.data.StudyReminderWorker
+import com.aiko.lingo.data.StudyTracker
 import com.aiko.lingo.ui.conversation.ConversationScreen
 import com.aiko.lingo.ui.conversation.ConversationViewModel
 import com.aiko.lingo.ui.translate.TranslateScreen
@@ -55,6 +57,10 @@ import java.util.concurrent.TimeUnit
 
 class MainActivity : ComponentActivity() {
 
+    private val notificationPermission = registerForActivityResult(
+        androidx.activity.result.contract.ActivityResultContracts.RequestPermission()
+    ) { /* best-effort: reminders simply stay silent if denied */ }
+
     private val json = Json { ignoreUnknownKeys = true }
 
     private fun buildApi(connectS: Long, readS: Long, writeS: Long): AikoApiService {
@@ -80,6 +86,15 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
+        // Study reminders: track study days + hourly nudge while idle.
+        StudyTracker.init(this)
+        StudyReminderWorker.schedule(this)
+        if (android.os.Build.VERSION.SDK_INT >= 33 &&
+            checkSelfPermission(android.Manifest.permission.POST_NOTIFICATIONS) !=
+            android.content.pm.PackageManager.PERMISSION_GRANTED
+        ) {
+            notificationPermission.launch(android.Manifest.permission.POST_NOTIFICATIONS)
+        }
         setContent {
             var darkTheme by rememberSaveable { mutableStateOf(false) }
             AikoLingoTheme(darkTheme = darkTheme) {
