@@ -292,6 +292,7 @@ fun MainMenu(
     Column(
         modifier = Modifier
             .fillMaxSize()
+            .safeDrawingPadding()
             .verticalScroll(rememberScrollState())
             .padding(16.dp),
         horizontalAlignment = Alignment.CenterHorizontally
@@ -344,7 +345,7 @@ fun MainMenu(
             CuteMenuCard(text = "Ranks", icon = "🏆", color = MenuRanksGold, modifier = Modifier.weight(1f), onClick = onNavigateToLeaderboard)
         }
 
-        Spacer(modifier = Modifier.height(48.dp))
+        Spacer(modifier = Modifier.height(32.dp))
         TextButton(onClick = { showServerDialog = true }) {
             Text(
                 "🔗 ${ServerConfig.displayHost(serverUrl)} ⚙️",
@@ -352,7 +353,7 @@ fun MainMenu(
                 fontSize = 13.sp
             )
         }
-        TextButton(onClick = onToggleTheme, modifier = Modifier.padding(bottom = 32.dp)) {
+        TextButton(onClick = onToggleTheme, modifier = Modifier.padding(bottom = 64.dp)) {
             Text("✨ Switch Aesthetic ✨", fontWeight = FontWeight.Bold)
         }
     }
