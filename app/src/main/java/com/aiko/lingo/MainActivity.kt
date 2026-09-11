@@ -297,17 +297,17 @@ fun MainMenu(
             .padding(16.dp),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        Spacer(modifier = Modifier.height(48.dp))
+        Spacer(modifier = Modifier.height(16.dp))
 
         Card(
             shape = RoundedCornerShape(40.dp),
             elevation = CardDefaults.cardElevation(defaultElevation = 12.dp),
-            modifier = Modifier.padding(bottom = 24.dp)
+            modifier = Modifier.padding(bottom = 16.dp)
         ) {
             Image(
                 painter = painterResource(R.drawable.ic_launcher),
                 contentDescription = "Aiko",
-                modifier = Modifier.size(120.dp),
+                modifier = Modifier.size(90.dp),
                 contentScale = ContentScale.Crop
             )
         }
@@ -320,7 +320,7 @@ fun MainMenu(
         )
         Text(
             "Nihongo · JLPT track",
-            modifier = Modifier.padding(top = 4.dp, bottom = 32.dp),
+            modifier = Modifier.padding(top = 4.dp, bottom = 16.dp),
             style = MaterialTheme.typography.bodyLarge,
             color = Color.Gray
         )
@@ -329,23 +329,23 @@ fun MainMenu(
             CuteMenuCard(text = "Vocab", icon = "🌱", color = PastelGreen, modifier = Modifier.weight(1f), onClick = onNavigateToVocab)
             CuteMenuCard(text = "Grammar", icon = "✏️", color = PastelYellow, modifier = Modifier.weight(1f), onClick = onNavigateToGrammar)
         }
-        Spacer(modifier = Modifier.height(16.dp))
+        Spacer(modifier = Modifier.height(12.dp))
         MenuRow {
             CuteMenuCard(text = "Review", icon = "🔁", color = MenuPracticeBlue, modifier = Modifier.weight(1f), onClick = onNavigateToReview)
             CuteMenuCard(text = "Practice", icon = "✍️", color = MenuPracticeCoral, modifier = Modifier.weight(1f), onClick = onNavigateToPractice)
         }
-        Spacer(modifier = Modifier.height(16.dp))
+        Spacer(modifier = Modifier.height(12.dp))
         MenuRow {
             CuteMenuCard(text = "Chat", icon = "💬", color = ShoujoPink, modifier = Modifier.weight(1f), onClick = onNavigateToConversation)
             CuteMenuCard(text = "Translate", icon = "🔤", color = PastelOrange, modifier = Modifier.weight(1f), onClick = onNavigateToTranslate)
         }
-        Spacer(modifier = Modifier.height(16.dp))
+        Spacer(modifier = Modifier.height(12.dp))
         MenuRow {
             CuteMenuCard(text = "Stats", icon = "📊", color = MenuStatsTeal, modifier = Modifier.weight(1f), onClick = onNavigateToDashboard)
             CuteMenuCard(text = "Ranks", icon = "🏆", color = MenuRanksGold, modifier = Modifier.weight(1f), onClick = onNavigateToLeaderboard)
         }
 
-        Spacer(modifier = Modifier.height(32.dp))
+        Spacer(modifier = Modifier.height(16.dp))
         TextButton(onClick = { showServerDialog = true }) {
             Text(
                 "🔗 ${ServerConfig.displayHost(serverUrl)} ⚙️",
@@ -353,7 +353,7 @@ fun MainMenu(
                 fontSize = 13.sp
             )
         }
-        TextButton(onClick = onToggleTheme, modifier = Modifier.padding(bottom = 64.dp)) {
+        TextButton(onClick = onToggleTheme, modifier = Modifier.padding(bottom = 16.dp)) {
             Text("✨ Switch Aesthetic ✨", fontWeight = FontWeight.Bold)
         }
     }
@@ -446,7 +446,7 @@ fun CuteMenuCard(
 ) {
     Card(
         onClick = onClick,
-        modifier = modifier.height(92.dp),
+        modifier = modifier.height(82.dp),
         shape = RoundedCornerShape(28.dp),
         colors = CardDefaults.cardColors(containerColor = color),
         elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
