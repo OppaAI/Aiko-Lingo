@@ -4,6 +4,22 @@ plugins {
     id("org.jetbrains.kotlin.plugin.serialization")
 }
 
+import java.util.Properties
+
+// Single source of truth for the server URL: AIKO_PUBLIC_BASE_URL in
+// Aiko-chan (~/.aiko/.env.age, or config yaml), synced into
+// local.properties as aikoServerUrl=... by util/sync_app_server_url.sh.
+// Rebuild the APK to repoint the app — there is no in-app URL editor.
+val localProps = Properties().apply {
+    val f = rootProject.file("local.properties")
+    if (f.exists()) f.inputStream().use { load(it) }
+}
+val aikoServerUrl: String = (
+    localProps.getProperty("aikoServerUrl")
+        ?: System.getenv("AIKO_PUBLIC_BASE_URL")
+        ?: "https://aiko.ide-chroma.ts.net/"
+    ).trim().removeSuffix("/") + "/"
+
 android {
     namespace = "com.aiko.lingo"
     compileSdk = 37
@@ -14,10 +30,12 @@ android {
         targetSdk = 37
         versionCode = 1
         versionName = "0.1.1"
+        buildConfigField("String", "AIKO_SERVER_URL", "\"$aikoServerUrl\"")
     }
 
     buildFeatures {
         compose = true
+        buildConfig = true
     }
 }
 

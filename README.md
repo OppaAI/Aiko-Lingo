@@ -93,10 +93,10 @@
    - Let Gradle sync and download dependencies
 
 3. **Configure server connection:**
-    - No code changes needed: open the app, tap the **🔗 server row** under the main menu, and enter your Aiko-chan's Tailscale hostname (`https://<tailscale-hostname>/`) or Tailnet IP (`http://100.x.y.z:8787/`). Saving reconnects instantly; the choice persists across restarts.
+    - No code changes and no in-app editor: from the Aiko-chan repo run `util/sync_app_server_url.sh`, which bakes `AIKO_PUBLIC_BASE_URL` into this app (`BuildConfig`). Rebuild to repoint.
     - Tailscale handles TLS termination and auth, so plain `https://<tailscale-hostname>/` is normal here — you don't need your own certificate. (Cleartext is allowed for Tailnet IPs only; the WireGuard transport underneath stays encrypted.)
     - The backend must expose the `/api/nihongo` lingo router; audio URLs are built from the address you actually connect with, so hostnames, IPs, and funnel URLs all just work. Server operators can also pin the public origin via the `AIKO_PUBLIC_BASE_URL` env var (falls back to `REDIRECT_BASE`).
-    - Developers: the default is `ServerConfig.DEFAULT_URL`; Retrofit clients are built from the stored value in `MainActivity.kt`.
+    - Developers: the URL is `ServerConfig.DEFAULT_URL` (= `BuildConfig.AIKO_SERVER_URL`); Retrofit clients are built from it in `MainActivity.kt`.
 
 4. **Run:**
    - Select an emulator or physical device

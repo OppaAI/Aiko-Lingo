@@ -1,41 +1,23 @@
 package com.aiko.lingo.data
 
-import android.content.Context
+import com.aiko.lingo.BuildConfig
 import java.net.URL
 
 /**
  * Which Aiko-chan server the app talks to.
  *
- * No address is hardcoded into network calls: MainActivity builds Retrofit
- * from [get], and the user can change it in-app (menu → Server ⚙️) without
- * reinstalling. Changing networks (home Tailnet, Tailnet IP, funnel URL)
- * is a settings edit, not a code edit.
+ * Single source of truth: AIKO_PUBLIC_BASE_URL in Aiko-chan
+ * (~/.aiko/.env.age, or config yaml), synced at BUILD time into
+ * local.properties (aikoServerUrl=...) → BuildConfig.AIKO_SERVER_URL.
+ * There is intentionally no in-app editor and no per-install override:
+ * rebuild the APK to repoint the app.
  */
 object ServerConfig {
 
-    const val DEFAULT_URL = "https://aiko.ide-chroma.ts.net/"
+    val DEFAULT_URL: String = BuildConfig.AIKO_SERVER_URL
 
-    private const val PREFS = "aiko_server"
-    private const val KEY_URL = "server_url"
-
-    /** Stored URL, normalized, always ending in "/". */
-    fun get(context: Context): String {
-        val raw = context.applicationContext
-            .getSharedPreferences(PREFS, Context.MODE_PRIVATE)
-            .getString(KEY_URL, DEFAULT_URL) ?: DEFAULT_URL
-        return normalize(raw)
-    }
-
-    /** Persist [raw] after normalizing; returns the stored value. */
-    fun set(context: Context, raw: String): String {
-        val normalized = normalize(raw)
-        context.applicationContext
-            .getSharedPreferences(PREFS, Context.MODE_PRIVATE)
-            .edit()
-            .putString(KEY_URL, normalized)
-            .apply()
-        return normalized
-    }
+    /** Baked-in URL, normalized, always ending in "/". */
+    fun get(): String = normalize(DEFAULT_URL)
 
     fun normalize(raw: String): String {
         var s = raw.trim()
@@ -46,22 +28,11 @@ object ServerConfig {
         return s.removeSuffix("/") + "/"
     }
 
-    /** True for parseable http(s) URLs with a host (port/path allowed). */
-    fun isValid(raw: String): Boolean {
-        return try {
-            val url = URL(normalize(raw))
-            (url.protocol == "http" || url.protocol == "https") &&
-                url.host.isNotBlank()
-        } catch (e: Exception) {
-            false
-        }
-    }
-
     /** Short host label for the menu row, e.g. "aiko.ide-chroma.ts.net". */
     fun displayHost(url: String): String {
         return try {
             URL(url).host.ifBlank { url }
-        } catch (e: Exception) {
+        } catch (_: Exception) {
             url
         }
     }
