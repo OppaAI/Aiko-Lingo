@@ -146,7 +146,7 @@ MainActivity (short-TTL JSON client + long-TTL streaming client)
 
 ### Server-Side (Aiko-chan, FastAPI router at `/api/nihongo`)
 ```
-interface/webui/lingo/
+interface/android_app/lingo/
 ├── router.py      — HTTP routing, streaming, audio, streaks/XP/level bookkeeping,
 │                     JLPT gating, review/practice session sampler, courses/grammar
 ├── learn_api.py   — /learn/* (level-filtered pool + status)
@@ -158,7 +158,7 @@ interface/webui/lingo/
 └── models.py      — Pydantic request/response schemas
 ```
 
-LLM inference happens only in Chat, Translate, vocab-extraction fallback, and background pool spawning — Review/Practice/Stats/courses are pure SQLite. See `interface/webui/lingo/README.md` in Aiko-chan if present.
+LLM inference happens only in Chat, Translate, vocab-extraction fallback, and background pool spawning — Review/Practice/Stats/courses are pure SQLite. See `interface/android_app/lingo/README.md` in Aiko-chan if present.
 
 All endpoints authenticate via the caller's session (Tailscale-authenticated), not a client-supplied user ID — this keeps one user's SRS cards, streak, and XP from ever mixing with another's.
 
@@ -356,7 +356,7 @@ Per-user state is written to disk under `USER_SPACE_ROOT/<user_id>/` so it survi
 agentic/lingo/vocab.db    # SQLite: level-tagged SRS cards + review history (per user)
 agentic/lingo.db          # SQLite: level / XP ledger / streaks / JLPT progress (per user)
 data/word_of_day/{user_id}.json   # today's cached Word of the Day
-interface/webui/lingo/materials.db  # SQLite (shared, versioned): JLPT cards, courses,
+interface/android_app/lingo/materials.db  # SQLite (shared, versioned): JLPT cards, courses,
                                      grammar decks, pre-spawned vocab/lesson pools
 ```
 Legacy files (`data/streaks|levels|xp/*.json`, `lingo_vocab.db`, `vocab_pool.db`, `lesson_pool.db`) are auto-migrated into the above on first run.
